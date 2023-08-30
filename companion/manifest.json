@@ -5,8 +5,8 @@
 	"description": "shelly",
 	"version": "0.1.0",
 	"license": "MIT",
-	"repository": "git+https://github.com/bitfocus/companion-module-shelly-http.git",
-	"bugs": "https://github.com/bitfocus/companion-module-shelly-http/issues",
+	"repository": "git+https://github.com/bitfocus/companion-module-shelly-ws.git",
+	"bugs": "https://github.com/bitfocus/companion-module-shelly-ws/issues",
 	"maintainers": [
 		{
 			"name": "Leon Reucher",
