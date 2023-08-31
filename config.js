@@ -45,6 +45,7 @@ export const configFields = [
 			{ id: 9, label: 'Shelly Pro 3' },
 			{ id: 10, label: 'Shelly Pro 4PM' },
 			{ id: 11, label: 'Shelly Pro Dual Cover PM' },
+			{ id: 12, label: 'Shelly Plus I4' },
 		],
 	},
 ]

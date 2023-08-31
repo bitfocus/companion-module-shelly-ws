@@ -546,4 +546,60 @@ class ShellyMasterCover {
     }
 }
 
-export { ShellyRelayMaster as ShellyMaster, ShellyRelayMasterPM as ShellyMasterPM, ShellyMasterCover};
+class ShellyMasterInput {
+    constructor(inputCount) {
+        this.inputCount = inputCount;
+        this.inputStates = [];
+    }
+
+    parseIncomingData(data) {
+        if(data.result != null) {
+            for (let i = 0; i < this.inputCount; i++) {            
+                const inputKey = `input:${i}`;
+                if (data.result[inputKey]?.state !== undefined) {
+                    this.inputStates[i] = data.result[inputKey].state;
+                }
+            }
+		}
+        if(data.method != null && data.method == "NotifyStatus") {
+            for (let i = 0; i < this.inputCount; i++) {            
+                const inputKey = `input:${i}`;
+                if (data.params[inputKey]?.state !== undefined) {
+                    this.inputStates[i] = data.params[inputKey].state;
+                }
+            }
+		}
+    }
+
+    getActionDefinitions() {
+        return {};
+    }
+
+    getFeedbackDefinitions() {
+        const inputOptions = Array.from({ length: this.inputCount }, (_, index) => ({
+            id: index,
+            label: `Input ${index + 1}`,
+        }));
+        return {
+            inputState: {
+                type: 'boolean',
+                name: 'Input state',
+                description: 'Feedback on the Shelly inputs',
+                options: [
+                    {
+                        type: 'dropdown',
+                        label: 'Input',
+                        id: 'selectedInput',
+                        default: 0,
+                        choices: inputOptions,
+                    },
+                ],
+                callback: (feedback, context) => {
+                    return this.inputStates[feedback.options.selectedInput];
+                }
+            },
+        }
+    }
+}
+
+export { ShellyRelayMaster as ShellyMaster, ShellyRelayMasterPM as ShellyMasterPM, ShellyMasterCover, ShellyMasterInput};

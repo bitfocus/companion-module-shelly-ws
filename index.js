@@ -1,7 +1,7 @@
 import { InstanceBase, runEntrypoint, InstanceStatus, combineRgb } from '@companion-module/base'
 import WebSocket from 'ws'
 import { upgradeScripts } from './upgrade.js'
-import { ShellyMaster, ShellyMasterCover, ShellyMasterPM} from './shelly.js';
+import { ShellyMaster, ShellyMasterCover, ShellyMasterPM, ShellyMasterInput} from './shelly.js';
 import { configFields } from './config.js'
 
 
@@ -45,6 +45,7 @@ class WebsocketInstance extends InstanceBase {
 			case 9: ShellyMaster.shellyInstance = new ShellyMaster(3,3); break;
 			case 10: ShellyMaster.shellyInstance = new ShellyMasterPM(4,4); break;
 			case 11: ShellyMaster.shellyInstance = new ShellyMasterCover(2,4); break;
+			case 12: ShellyMaster.shellyInstance = new ShellyMasterInput(4); break;
 		}
 		this.initFeedbacks();
 		this.initActions();
