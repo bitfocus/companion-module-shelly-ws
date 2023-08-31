@@ -8,12 +8,12 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/bitfocus/companion-module-generic-http.git"
+		"url": "git+https://github.com/bitfocus/companion-module-shelly-ws.git"
 	},
 	"license": "MIT",
 	"dependencies": {
 		"@companion-module/base": "~1.5.0",
-		"got": "^12.6.0"
+		"ws": "^8.13.0"
 	},
 	"devDependencies": {
 		"@companion-module/tools": "^1.2.0"
