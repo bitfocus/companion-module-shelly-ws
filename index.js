@@ -44,6 +44,7 @@ class WebsocketInstance extends InstanceBase {
 			case 8: ShellyMaster.shellyInstance = new ShellyMasterCover(1,2); break;
 			case 9: ShellyMaster.shellyInstance = new ShellyMaster(3,3); break;
 			case 10: ShellyMaster.shellyInstance = new ShellyMasterPM(4,4); break;
+			case 11: ShellyMaster.shellyInstance = new ShellyMasterCover(2,4); break;
 		}
 		this.initFeedbacks();
 		this.initActions();
