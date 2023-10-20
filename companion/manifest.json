@@ -3,7 +3,7 @@
 	"name": "shelly-ws",
 	"shortname": "shelly",
 	"description": "shelly",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"license": "MIT",
 	"repository": "git+https://github.com/bitfocus/companion-module-shelly-ws.git",
 	"bugs": "https://github.com/bitfocus/companion-module-shelly-ws/issues",

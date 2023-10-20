@@ -10,12 +10,10 @@ class WebsocketInstance extends InstanceBase {
 
 	async init(config) {
 		this.config = config
-
+		this.keepAlive = true;
 		this.setupInstance();
-
-		this.initWebSocket()
 		this.isInitialized = true
-
+		this.initWebSocket()
 	}
 
 	async destroy() {
@@ -59,6 +57,33 @@ class WebsocketInstance extends InstanceBase {
 		this.initWebSocket();
 	}
 
+	sendPing() {
+        if (ShellyMaster.ws && ShellyMaster.ws.readyState === 1) {
+			this.hasAnsweredPing = false;
+            ShellyMaster.ws.ping();
+			this.pingTimeout = setTimeout(() => {
+                if (!this.hasAnsweredPing) {
+					this.updateStatus(InstanceStatus.Disconnected, "Connection lost")
+					if(this.pingInterval) {
+						clearInterval(this.pingInterval);
+						this.pingInterval = null;
+					}
+                    this.maybeReconnect(); // Rufen Sie die maybeReconnect-Methode auf, wenn keine Pong empfangen wurde
+                }
+            }, 3000);
+        }
+    }
+
+    initializePingPong() {
+        this.pingInterval = setInterval(() => {
+            this.sendPing();
+        }, 3000);
+
+        ShellyMaster.ws.on('pong', () => {
+			this.hasAnsweredPing = true;
+        });
+    }
+
 	maybeReconnect() {
 		if (this.isInitialized && this.config.reconnect) {
 			if (this.reconnect_timer) {
@@ -71,6 +96,10 @@ class WebsocketInstance extends InstanceBase {
 	}
 
 	initWebSocket() {
+		if(this.pingInterval) {
+			clearTimeout(this.pingInterval);
+			this.pingInterval = null;
+		}
 		if (this.reconnect_timer) {
 			clearTimeout(this.reconnect_timer)
 			this.reconnect_timer = null
@@ -83,7 +112,6 @@ class WebsocketInstance extends InstanceBase {
 		}
 
 		this.updateStatus(InstanceStatus.Connecting)
-
 		if (ShellyMaster.ws) {
 			ShellyMaster.ws.close(1000)
 			delete ShellyMaster.ws
@@ -92,6 +120,10 @@ class WebsocketInstance extends InstanceBase {
 
 		ShellyMaster.ws.on('open', () => {
 			this.updateStatus(InstanceStatus.Ok);
+			if (this.reconnect_timer) {
+				clearTimeout(this.reconnect_timer)
+			}
+			this.initializePingPong();
 			ShellyMaster.ws.send(
 				JSON.stringify(
 					{
@@ -110,7 +142,8 @@ class WebsocketInstance extends InstanceBase {
 		ShellyMaster.ws.on('message', this.messageReceivedFromWebSocket.bind(this))
 
 		ShellyMaster.ws.on('error', (data) => {
-			this.log('error', `WebSocket error: ${data}`)
+			console.log('error', `WebSocket error: ${data}`)
+			this.maybeReconnect();
 		})
 	}
 
