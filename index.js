@@ -12,10 +12,8 @@ class WebsocketInstance extends InstanceBase {
 		this.config = config
 
 		this.setupInstance();
-
 		this.initWebSocket()
 		this.isInitialized = true
-
 	}
 
 	async destroy() {
@@ -60,6 +58,7 @@ class WebsocketInstance extends InstanceBase {
 	}
 
 	maybeReconnect() {
+		console.log("Maybe Reconnect")
 		if (this.isInitialized && this.config.reconnect) {
 			if (this.reconnect_timer) {
 				clearTimeout(this.reconnect_timer)
@@ -85,6 +84,7 @@ class WebsocketInstance extends InstanceBase {
 		this.updateStatus(InstanceStatus.Connecting)
 
 		if (ShellyMaster.ws) {
+			console.log("init websocket")
 			ShellyMaster.ws.close(1000)
 			delete ShellyMaster.ws
 		}
@@ -92,6 +92,9 @@ class WebsocketInstance extends InstanceBase {
 
 		ShellyMaster.ws.on('open', () => {
 			this.updateStatus(InstanceStatus.Ok);
+			if (this.reconnect_timer) {
+				clearTimeout(this.reconnect_timer)
+			}
 			ShellyMaster.ws.send(
 				JSON.stringify(
 					{
@@ -110,7 +113,8 @@ class WebsocketInstance extends InstanceBase {
 		ShellyMaster.ws.on('message', this.messageReceivedFromWebSocket.bind(this))
 
 		ShellyMaster.ws.on('error', (data) => {
-			this.log('error', `WebSocket error: ${data}`)
+			console.log('error', `WebSocket error: ${data}`)
+			this.maybeReconnect();
 		})
 	}
 
