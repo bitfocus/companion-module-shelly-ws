@@ -1,177 +1,223 @@
-import { InstanceBase, runEntrypoint, InstanceStatus, combineRgb } from '@companion-module/base'
-import WebSocket from 'ws'
-import { upgradeScripts } from './upgrade.js'
-import { ShellyMaster, ShellyMasterCover, ShellyMasterPM, ShellyMasterInput} from './shelly.js';
-import { configFields } from './config.js'
-
+import {
+  InstanceBase,
+  runEntrypoint,
+  InstanceStatus,
+  combineRgb,
+} from "@companion-module/base";
+import WebSocket from "ws";
+import { upgradeScripts } from "./upgrade.js";
+import {
+  ShellyMaster,
+  ShellyMasterCover,
+  ShellyMasterPM,
+  ShellyMasterInput,
+} from "./shelly.js";
+import { configFields } from "./config.js";
 
 class WebsocketInstance extends InstanceBase {
-	isInitialized = false
+  isInitialized = false;
 
-	async init(config) {
-		this.config = config
-		this.keepAlive = true;
-		this.setupInstance();
-		this.isInitialized = true
-		this.initWebSocket()
-	}
+  async init(config) {
+    this.config = config;
+    this.keepAlive = true;
+    this.setupInstance();
+    this.isInitialized = true;
+    this.initWebSocket();
+  }
 
-	async destroy() {
-		this.isInitialized = false
-		if (this.reconnect_timer) {
-			clearTimeout(this.reconnect_timer)
-			this.reconnect_timer = null
-		}
-		if (ShellyMaster.ws) {
-			ShellyMaster.ws.close(1000)
-			delete ShellyMaster.ws
-		}
-	}
+  async destroy() {
+    this.isInitialized = false;
+    if (this.reconnect_timer) {
+      clearTimeout(this.reconnect_timer);
+      this.reconnect_timer = null;
+    }
+    if (ShellyMaster.ws) {
+      ShellyMaster.ws.close(1000);
+      delete ShellyMaster.ws;
+    }
+  }
 
-	setupInstance() {
-		delete ShellyMaster.shellyInstance;
-		switch(this.config.shellyProduct) {
-			case 0: ShellyMaster.shellyInstance = new ShellyMaster(1,1); break;
-			case 1: ShellyMaster.shellyInstance = new ShellyMasterPM(1,1); break;
-			case 2: ShellyMaster.shellyInstance = new ShellyMasterPM(2,2); break;
-			case 3: ShellyMaster.shellyInstance = new ShellyMasterCover(1,2); break;
-			case 4: ShellyMaster.shellyInstance = new ShellyMaster(1,1); break;
-			case 5: ShellyMaster.shellyInstance = new ShellyMasterPM(1,1); break;
-			case 6: ShellyMaster.shellyInstance = new ShellyMaster(2,2); break;
-			case 7: ShellyMaster.shellyInstance = new ShellyMasterPM(2,2); break;
-			case 8: ShellyMaster.shellyInstance = new ShellyMasterCover(1,2); break;
-			case 9: ShellyMaster.shellyInstance = new ShellyMaster(3,3); break;
-			case 10: ShellyMaster.shellyInstance = new ShellyMasterPM(4,4); break;
-			case 11: ShellyMaster.shellyInstance = new ShellyMasterCover(2,4); break;
-			case 12: ShellyMaster.shellyInstance = new ShellyMasterInput(4); break;
-		}
-		this.initFeedbacks();
-		this.initActions();
-	}
+  setupInstance() {
+    delete ShellyMaster.shellyInstance;
+    switch (this.config.shellyProduct) {
+      case 0:
+        ShellyMaster.shellyInstance = new ShellyMaster(1, 1);
+        break;
+      case 1:
+        ShellyMaster.shellyInstance = new ShellyMasterPM(1, 1);
+        break;
+      case 2:
+        ShellyMaster.shellyInstance = new ShellyMasterPM(2, 2);
+        break;
+      case 3:
+        ShellyMaster.shellyInstance = new ShellyMasterCover(1, 2);
+        break;
+      case 4:
+        ShellyMaster.shellyInstance = new ShellyMaster(1, 1);
+        break;
+      case 5:
+        ShellyMaster.shellyInstance = new ShellyMasterPM(1, 1);
+        break;
+      case 6:
+        ShellyMaster.shellyInstance = new ShellyMaster(2, 2);
+        break;
+      case 7:
+        ShellyMaster.shellyInstance = new ShellyMasterPM(2, 2);
+        break;
+      case 8:
+        ShellyMaster.shellyInstance = new ShellyMasterCover(1, 2);
+        break;
+      case 9:
+        ShellyMaster.shellyInstance = new ShellyMaster(3, 3);
+        break;
+      case 10:
+        ShellyMaster.shellyInstance = new ShellyMasterPM(4, 4);
+        break;
+      case 11:
+        ShellyMaster.shellyInstance = new ShellyMasterCover(2, 4);
+        break;
+      case 12:
+        ShellyMaster.shellyInstance = new ShellyMasterInput(4);
+        break;
+    }
+    this.initFeedbacks();
+    this.initActions();
+    this.initVariables();
+  }
 
-	async configUpdated(config) {
-		this.config = config
+  async configUpdated(config) {
+    this.config = config;
 
-		this.setupInstance();
+    this.setupInstance();
 
-		this.initWebSocket();
-	}
+    this.initWebSocket();
+  }
 
-	sendPing() {
-        if (ShellyMaster.ws && ShellyMaster.ws.readyState === 1) {
-			this.hasAnsweredPing = false;
-            ShellyMaster.ws.ping();
-			this.pingTimeout = setTimeout(() => {
-                if (!this.hasAnsweredPing) {
-					this.updateStatus(InstanceStatus.Disconnected, "Connection lost")
-					if(this.pingInterval) {
-						clearInterval(this.pingInterval);
-						this.pingInterval = null;
-					}
-                    this.maybeReconnect(); // Rufen Sie die maybeReconnect-Methode auf, wenn keine Pong empfangen wurde
-                }
-            }, 3000);
+  sendPing() {
+    if (ShellyMaster.ws && ShellyMaster.ws.readyState === 1) {
+      this.hasAnsweredPing = false;
+      ShellyMaster.ws.ping();
+      this.pingTimeout = setTimeout(() => {
+        if (!this.hasAnsweredPing) {
+          this.updateStatus(InstanceStatus.Disconnected, "Connection lost");
+          if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+          }
+          this.maybeReconnect(); // Rufen Sie die maybeReconnect-Methode auf, wenn keine Pong empfangen wurde
         }
+      }, 3000);
+    }
+  }
+
+  initializePingPong() {
+    this.pingInterval = setInterval(() => {
+      this.sendPing();
+    }, 3000);
+
+    ShellyMaster.ws.on("pong", () => {
+      this.hasAnsweredPing = true;
+    });
+  }
+
+  maybeReconnect() {
+    if (this.isInitialized && this.config.reconnect) {
+      if (this.reconnect_timer) {
+        clearTimeout(this.reconnect_timer);
+      }
+      this.reconnect_timer = setTimeout(() => {
+        this.initWebSocket();
+      }, 5000);
+    }
+  }
+
+  initWebSocket() {
+    if (this.pingInterval) {
+      clearTimeout(this.pingInterval);
+      this.pingInterval = null;
+    }
+    if (this.reconnect_timer) {
+      clearTimeout(this.reconnect_timer);
+      this.reconnect_timer = null;
     }
 
-    initializePingPong() {
-        this.pingInterval = setInterval(() => {
-            this.sendPing();
-        }, 3000);
-
-        ShellyMaster.ws.on('pong', () => {
-			this.hasAnsweredPing = true;
-        });
+    const url = "ws://" + this.config.targetIp + "/rpc";
+    if (!url || !this.config.targetIp) {
+      this.updateStatus(InstanceStatus.BadConfig, `IP is missing`);
+      return;
     }
 
-	maybeReconnect() {
-		if (this.isInitialized && this.config.reconnect) {
-			if (this.reconnect_timer) {
-				clearTimeout(this.reconnect_timer)
-			}
-			this.reconnect_timer = setTimeout(() => {
-				this.initWebSocket()
-			}, 5000)
-		}
-	}
+    this.updateStatus(InstanceStatus.Connecting);
+    if (ShellyMaster.ws) {
+      ShellyMaster.ws.close(1000);
+      delete ShellyMaster.ws;
+    }
+    ShellyMaster.ws = new WebSocket(url);
 
-	initWebSocket() {
-		if(this.pingInterval) {
-			clearTimeout(this.pingInterval);
-			this.pingInterval = null;
-		}
-		if (this.reconnect_timer) {
-			clearTimeout(this.reconnect_timer)
-			this.reconnect_timer = null
-		}
+    ShellyMaster.ws.on("open", () => {
+      this.updateStatus(InstanceStatus.Ok);
+      if (this.reconnect_timer) {
+        clearTimeout(this.reconnect_timer);
+      }
+      this.initializePingPong();
+      ShellyMaster.ws.send(
+        JSON.stringify({
+          id: 1,
+          src: "user_1",
+          method: "Shelly.GetStatus",
+        })
+      );
+    });
+    ShellyMaster.ws.on("close", (code) => {
+      this.updateStatus(
+        InstanceStatus.Disconnected,
+        `Connection closed with code ${code}`
+      );
+      this.maybeReconnect();
+    });
 
-		const url = "ws://" + this.config.targetIp + "/rpc"
-		if (!url || !this.config.targetIp) {
-			this.updateStatus(InstanceStatus.BadConfig, `IP is missing`)
-			return
-		}
+    ShellyMaster.ws.on("message", this.messageReceivedFromWebSocket.bind(this));
 
-		this.updateStatus(InstanceStatus.Connecting)
-		if (ShellyMaster.ws) {
-			ShellyMaster.ws.close(1000)
-			delete ShellyMaster.ws
-		}
-		ShellyMaster.ws = new WebSocket(url)
+    ShellyMaster.ws.on("error", (data) => {
+      console.log("error", `WebSocket error: ${data}`);
+      this.maybeReconnect();
+    });
+  }
 
-		ShellyMaster.ws.on('open', () => {
-			this.updateStatus(InstanceStatus.Ok);
-			if (this.reconnect_timer) {
-				clearTimeout(this.reconnect_timer)
-			}
-			this.initializePingPong();
-			ShellyMaster.ws.send(
-				JSON.stringify(
-					{
-						id: 1,
-						src: "user_1",
-						method: "Shelly.GetStatus"
-					}
-				)
-			)
-		})
-		ShellyMaster.ws.on('close', (code) => {
-			this.updateStatus(InstanceStatus.Disconnected, `Connection closed with code ${code}`)
-			this.maybeReconnect()
-		})
+  messageReceivedFromWebSocket(data) {
+    let msgValue = null;
+    try {
+      msgValue = JSON.parse(data);
+    } catch (e) {
+      msgValue = data;
+    }
+    if (msgValue != null) {
+      ShellyMaster.shellyInstance.parseIncomingData(msgValue);
+      this.checkFeedbacks();
+      this.setVariableValues(ShellyMaster.shellyInstance.getVariableValues());
+    }
+  }
 
-		ShellyMaster.ws.on('message', this.messageReceivedFromWebSocket.bind(this))
+  getConfigFields() {
+    return configFields;
+  }
 
-		ShellyMaster.ws.on('error', (data) => {
-			console.log('error', `WebSocket error: ${data}`)
-			this.maybeReconnect();
-		})
-	}
+  initFeedbacks() {
+    this.setFeedbackDefinitions(
+      ShellyMaster.shellyInstance.getFeedbackDefinitions()
+    );
+  }
 
-
-	messageReceivedFromWebSocket(data) {
-		let msgValue = null
-		try {
-			msgValue = JSON.parse(data)
-		} catch (e) {
-			msgValue = data
-		}
-		if(msgValue != null) {
-			ShellyMaster.shellyInstance.parseIncomingData(msgValue);
-			this.checkFeedbacks();
-		}
-	}
-
-	getConfigFields() {
-		return configFields;
-	}
-
-	initFeedbacks() {
-		this.setFeedbackDefinitions(ShellyMaster.shellyInstance.getFeedbackDefinitions());
-	}
-
-	initActions() {
-		this.setActionDefinitions(ShellyMaster.shellyInstance.getActionDefinitions());
-	}
+  initActions() {
+    this.setActionDefinitions(
+      ShellyMaster.shellyInstance.getActionDefinitions()
+    );
+  }
+  initVariables() {
+    this.setVariableDefinitions(
+      ShellyMaster.shellyInstance.getVariableDefinitions()
+    );
+  }
 }
 
-runEntrypoint(WebsocketInstance, upgradeScripts)
+runEntrypoint(WebsocketInstance, upgradeScripts);
