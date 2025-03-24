@@ -17,6 +17,12 @@ export const configFields = [
     default: true,
   },
   {
+    type: "textinput",
+    id: "password",
+    label: "Password (optional)",
+    width: 12,
+  },
+  {
     type: "static-text",
     id: "info",
     width: 12,

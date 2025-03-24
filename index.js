@@ -13,6 +13,7 @@ import {
   ShellyMasterInput,
 } from "./shelly.js";
 import { configFields } from "./config.js";
+import * as crypto from "crypto";
 
 class WebsocketInstance extends InstanceBase {
   isInitialized = false;
@@ -176,7 +177,59 @@ class WebsocketInstance extends InstanceBase {
       this.maybeReconnect();
     });
 
-    ShellyMaster.ws.on("message", this.messageReceivedFromWebSocket.bind(this));
+    ShellyMaster.ws.on("message", async (message) => {
+      try {
+        const data = JSON.parse(message);
+        if (data.error?.code === 401) {
+          console.log("Authentication required, attempting Digest Auth...");
+
+          const { auth_type, nonce, realm } = JSON.parse(data.error.message);
+          if (auth_type !== "digest")
+            return console.error("Unsupported authentication type");
+
+          const cnonce = Math.floor(Math.random() * 10e8);
+          const username = "admin",
+            password = this.config.password;
+          const ha1 = crypto
+            .createHash("sha256")
+            .update([username, realm, password].join(":"))
+            .digest("hex");
+
+          const response = crypto
+            .createHash("sha256")
+            .update(
+              `${ha1}:${nonce}:1:${cnonce}:auth:6370ec69915103833b5222b368555393393f098bfbfbb59f47e0590af135f062`
+            )
+            .digest("hex");
+
+          const auth = {
+            realm,
+            username,
+            nonce,
+            cnonce,
+            response,
+            algorithm: "SHA-256",
+          };
+
+          ShellyMaster.auth = auth;
+
+          const messageToSend = {
+            id: 1,
+            src: "user_1",
+            method: "Shelly.GetStatus",
+            auth: auth,
+          };
+
+          setTimeout(() => {
+            ShellyMaster.ws.send(JSON.stringify(messageToSend));
+          }, 1000);
+        } else {
+          this.messageReceivedFromWebSocket(message);
+        }
+      } catch (e) {
+        console.error("Error processing WebSocket message", e);
+      }
+    });
 
     ShellyMaster.ws.on("error", (data) => {
       console.log("error", `WebSocket error: ${data}`);

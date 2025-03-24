@@ -1,6 +1,7 @@
 class ShellyRelayMaster {
   static ws = null;
   static shellyInstance = null;
+  static auth = null;
 
   constructor(relayCount, inputCount) {
     this.relayCount = relayCount;
@@ -40,7 +41,6 @@ class ShellyRelayMaster {
         const inputKey = `input:${i}`;
         if (data.params[inputKey]?.state !== undefined) {
           this.inputStates[i] = data.params[inputKey].state;
-          console.log("GOT INPUT INFO");
         }
       }
     }
@@ -55,6 +55,7 @@ class ShellyRelayMaster {
           id: relayId,
           on: state == 0 ? true : false,
         },
+        auth: ShellyRelayMaster.auth,
       })
     );
   }
@@ -482,6 +483,7 @@ class ShellyMasterCover {
         params: {
           id: coverId,
         },
+        auth: ShellyRelayMaster.auth,
       })
     );
   }
@@ -494,6 +496,7 @@ class ShellyMasterCover {
         params: {
           id: coverId,
         },
+        auth: ShellyRelayMaster.auth,
       })
     );
   }
@@ -505,6 +508,7 @@ class ShellyMasterCover {
         params: {
           id: coverId,
         },
+        auth: ShellyRelayMaster.auth,
       })
     );
   }
@@ -517,6 +521,7 @@ class ShellyMasterCover {
           id: coverId,
           pos: pos,
         },
+        auth: ShellyRelayMaster.auth,
       })
     );
   }
