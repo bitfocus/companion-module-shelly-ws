@@ -1,22 +1,22 @@
 {
-	"name": "shelly-ws",
-	"version": "1.0.1",
-	"main": "index.js",
-	"type": "module",
-	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1"
-	},
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/bitfocus/companion-module-shelly-ws.git"
-	},
-	"license": "MIT",
-	"dependencies": {
-		"@companion-module/base": "~1.5.0",
-		"crypto": "^1.0.1",
-		"ws": "^8.17.1"
-	},
-	"devDependencies": {
-		"@companion-module/tools": "^1.2.0"
-	}
+  "name": "shelly-ws",
+  "version": "1.1.1",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bitfocus/companion-module-shelly-ws.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@companion-module/base": "~1.5.0",
+    "crypto": "^1.0.1",
+    "ws": "^8.17.1"
+  },
+  "devDependencies": {
+    "@companion-module/tools": "^1.2.0"
+  }
 }
