@@ -1,31 +1,31 @@
 {
-  "name": "shelly-ws",
-  "version": "1.1.1",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "format": "prettier -w .",
-    "package": "companion-module-build",
-    "lint:raw": "eslint",
-    "lint": "yarn lint:raw ."
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/bitfocus/companion-module-shelly-ws.git"
-  },
-  "license": "MIT",
-  "dependencies": {
-    "@companion-module/base": "~1.12.0",
-    "crypto": "^1.0.1",
-    "ws": "^8.18.3"
-  },
-  "devDependencies": {
-    "@companion-module/tools": "^2.4.2",
-    "eslint": "^9.39.2",
-    "prettier": "^3.7.4"
-  },
-  "engines": {
-    "node": "^22.12"
-  },
-  "packageManager": "yarn@4.12.0"
+	"name": "shelly-ws",
+	"version": "1.1.1",
+	"main": "index.js",
+	"type": "module",
+	"scripts": {
+		"format": "prettier -w .",
+		"package": "companion-module-build",
+		"lint:raw": "eslint",
+		"lint": "yarn lint:raw ."
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/bitfocus/companion-module-shelly-ws.git"
+	},
+	"license": "MIT",
+	"dependencies": {
+		"@companion-module/base": "~1.12.0",
+		"crypto": "^1.0.1",
+		"ws": "^8.18.3"
+	},
+	"devDependencies": {
+		"@companion-module/tools": "^2.4.2",
+		"eslint": "^9.39.2",
+		"prettier": "^3.7.4"
+	},
+	"engines": {
+		"node": "^22.12"
+	},
+	"packageManager": "yarn@4.12.0"
 }
