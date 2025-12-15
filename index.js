@@ -153,6 +153,7 @@ class WebsocketInstance extends InstanceBase {
       ShellyMaster.ws.close(1000);
       delete ShellyMaster.ws;
     }
+    ShellyMaster.auth = null;
     ShellyMaster.ws = new WebSocket(url);
 
     ShellyMaster.ws.on("open", () => {
@@ -221,7 +222,16 @@ class WebsocketInstance extends InstanceBase {
           };
 
           setTimeout(() => {
-            ShellyMaster.ws.send(JSON.stringify(messageToSend));
+            try {
+              if (
+                ShellyMaster.ws &&
+                ShellyMaster.ws.readyState === WebSocket.OPEN
+              ) {
+                ShellyMaster.ws.send(JSON.stringify(messageToSend));
+              }
+            } catch (error) {
+              console.error("Error sending auth message", error);
+            }
           }, 1000);
         } else {
           this.messageReceivedFromWebSocket(message);
