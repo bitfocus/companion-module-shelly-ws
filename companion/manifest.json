@@ -15,7 +15,7 @@
 	],
 	"legacyIds": [],
 	"runtime": {
-		"type": "node18",
+		"type": "node22",
 		"api": "nodejs-ipc",
 		"apiVersion": "0.0.0",
 		"entrypoint": "../index.js"
@@ -24,7 +24,7 @@
 	"products": [
 		"Shelly Plus 1",
 		"Shelly Plus 1PM",
-		"Shelly Plus 2PM", 
+		"Shelly Plus 2PM",
 		"Shelly Pro 1",
 		"Shelly Pro 2",
 		"Shelly Pro 2PM",
