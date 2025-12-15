@@ -1,4 +1,4 @@
-import { InstanceBase, runEntrypoint, InstanceStatus, combineRgb } from '@companion-module/base'
+import { InstanceBase, runEntrypoint, InstanceStatus } from '@companion-module/base'
 import WebSocket from 'ws'
 import { upgradeScripts } from './upgrade.js'
 import { ShellyMaster, ShellyMasterCover, ShellyMasterPM, ShellyMasterInput } from './shelly.js'
@@ -229,7 +229,7 @@ class WebsocketInstance extends InstanceBase {
 		let msgValue = null
 		try {
 			msgValue = JSON.parse(data)
-		} catch (e) {
+		} catch {
 			msgValue = data
 		}
 		if (msgValue != null) {

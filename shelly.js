@@ -131,7 +131,7 @@ class ShellyRelayMaster {
 						choices: relayOptions,
 					},
 				],
-				callback: (feedback, context) => {
+				callback: (feedback) => {
 					return this.relayStates[feedback.options.selectedRelay]
 				},
 			},
@@ -148,7 +148,7 @@ class ShellyRelayMaster {
 						choices: inputOptions,
 					},
 				],
-				callback: (feedback, context) => {
+				callback: (feedback) => {
 					return this.inputStates[feedback.options.selectedInput]
 				},
 			},
@@ -175,18 +175,16 @@ class ShellyRelayMaster {
 						],
 					},
 				],
-				callback: (feedback, context) => {
+				callback: (feedback) => {
 					switch (feedback.options.selectedTempFormat) {
 						case 0:
 							return {
 								text: this.relayTempsCelsius[feedback.options.selectedRelay],
 							}
-							break
 						case 1:
 							return {
 								text: this.relayTempsFahrenheit[feedback.options.selectedRelay],
 							}
-							break
 						default:
 							return {
 								text: this.relayTempsCelsius[feedback.options.selectedRelay],
@@ -228,7 +226,7 @@ class ShellyRelayMaster {
 						choices: stateOptions,
 					},
 				],
-				callback: async (action, context) => {
+				callback: async (action) => {
 					this.switchRelay(action.options.selectedRelay, action.options.selectedRelayState)
 				},
 			},
@@ -244,7 +242,7 @@ class ShellyRelayMaster {
 						choices: relayOptions,
 					},
 				],
-				callback: async (action, context) => {
+				callback: async (action) => {
 					if (this.relayStates[action.options.selectedRelay] === undefined) {
 						this.relayStates[action.options.selectedRelay] = false
 					}
@@ -343,7 +341,7 @@ class ShellyRelayMasterPM extends ShellyRelayMaster {
 						choices: relayOptions,
 					},
 				],
-				callback: (feedback, context) => {
+				callback: (feedback) => {
 					return {
 						text: this.powerConsumptions[feedback.options.selectedRelay] + ' W',
 					}
@@ -540,7 +538,7 @@ class ShellyMasterCover {
 						choices: actionOptions,
 					},
 				],
-				callback: async (action, context) => {
+				callback: async (action) => {
 					switch (action.options.selectedAction) {
 						case 0:
 							this.openCover(action.options.selectedCover)
@@ -574,7 +572,7 @@ class ShellyMasterCover {
 						max: 100,
 					},
 				],
-				callback: async (action, context) => {
+				callback: async (action) => {
 					this.goToPosition(action.options.selectedCover, action.options.targetPosition)
 				},
 			},
@@ -614,7 +612,7 @@ class ShellyMasterCover {
 						choices: coverOptions,
 					},
 				],
-				callback: (feedback, context) => {
+				callback: (feedback) => {
 					return {
 						text: this.coverPositions[feedback.options.selectedCover] + '%',
 					}
@@ -633,7 +631,7 @@ class ShellyMasterCover {
 						choices: coverOptions,
 					},
 				],
-				callback: (feedback, context) => {
+				callback: (feedback) => {
 					return { text: this.coverStates[feedback.options.selectedCover] }
 				},
 			},
@@ -657,23 +655,18 @@ class ShellyMasterCover {
 						choices: coverStateOptions,
 					},
 				],
-				callback: (feedback, context) => {
+				callback: (feedback) => {
 					switch (feedback.options.selectedCoverState) {
 						case 0:
 							return this.coverStates[feedback.options.selectedCover] == 'opening' ? true : false
-							break
 						case 1:
 							return this.coverStates[feedback.options.selectedCover] == 'open' ? true : false
-							break
 						case 2:
 							return this.coverStates[feedback.options.selectedCover] == 'closing' ? true : false
-							break
 						case 3:
 							return this.coverStates[feedback.options.selectedCover] == 'closed' ? true : false
-							break
 						case 4:
 							return this.coverStates[feedback.options.selectedCover] == 'stopped' ? true : false
-							break
 					}
 				},
 			},
@@ -690,7 +683,7 @@ class ShellyMasterCover {
 						choices: inputOptions,
 					},
 				],
-				callback: (feedback, context) => {
+				callback: (feedback) => {
 					return this.inputStates[feedback.options.selectedInput]
 				},
 			},
@@ -707,7 +700,7 @@ class ShellyMasterCover {
 						choices: coverOptions,
 					},
 				],
-				callback: (feedback, context) => {
+				callback: (feedback) => {
 					return {
 						text: this.powerConsumptions[feedback.options.selectedCover] + ' W',
 					}
@@ -790,7 +783,7 @@ class ShellyMasterInput {
 						choices: inputOptions,
 					},
 				],
-				callback: (feedback, context) => {
+				callback: (feedback) => {
 					return this.inputStates[feedback.options.selectedInput]
 				},
 			},
