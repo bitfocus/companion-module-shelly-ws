@@ -13,12 +13,11 @@ class WebsocketInstance extends InstanceBase {
 	authAttempted = false
 	authSuccess = false
 	heartbeatInterval = null
+	requestId = 1
 
 	async init(config) {
 		this.config = config
-		this.keepAlive = true
 		this.setupInstance()
-		this.isInitialized = true
 		this.initWebSocket()
 	}
 
@@ -185,6 +184,8 @@ class WebsocketInstance extends InstanceBase {
 			if (this.reconnect_timer) {
 				clearTimeout(this.reconnect_timer)
 			}
+			this.isInitialized = true
+			this.updateStatus(InstanceStatus.Ok)
 			this.startHeartbeat()
 			this.sendShellyRequest('Shelly.GetStatus')
 		})
@@ -258,8 +259,6 @@ class WebsocketInstance extends InstanceBase {
 		})
 	}
 
-	requestId = 1
-
 	sendShellyRequest(method, params) {
 		if (this.ws && this.ws.readyState === WebSocket.OPEN) {
 			const request = {
@@ -286,8 +285,10 @@ class WebsocketInstance extends InstanceBase {
 		let msgValue = data
 		if (msgValue != null) {
 			if (msgValue.result !== undefined || msgValue.method !== undefined) {
+				if (this.authSuccess === false) {
+					this.updateStatus(InstanceStatus.Ok)
+				}
 				this.authSuccess = true
-				this.updateStatus(InstanceStatus.Ok)
 			}
 			this.shelly.parseIncomingData(msgValue)
 			const variables = this.shelly.getVariableValues()
