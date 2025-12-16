@@ -7,6 +7,12 @@ import * as crypto from 'crypto'
 
 class WebsocketInstance extends InstanceBase {
 	isInitialized = false
+	ws = null
+	auth = null
+	shelly = null
+	authAttempted = false
+	authSuccess = false
+	heartbeatInterval = null
 
 	async init(config) {
 		this.config = config
@@ -22,53 +28,72 @@ class WebsocketInstance extends InstanceBase {
 			clearTimeout(this.reconnect_timer)
 			this.reconnect_timer = null
 		}
-		if (ShellyMaster.ws) {
-			ShellyMaster.ws.close(1000)
-			delete ShellyMaster.ws
+		if (this.heartbeatInterval) {
+			clearInterval(this.heartbeatInterval)
+			this.heartbeatInterval = null
+		}
+		if (this.ws) {
+			this.ws.removeAllListeners()
+			// Add error handler to prevent unhandled errors during close
+			this.ws.on('error', () => {
+				// Ignore errors during shutdown
+			})
+			try {
+				// Only close if the connection is open or connecting
+				if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+					this.ws.close(1000)
+				}
+			} catch {
+				// Ignore errors during shutdown
+			}
+			this.ws = null
 		}
 	}
 
 	setupInstance() {
-		delete ShellyMaster.shellyInstance
+		const sendRequest = (method, params) => {
+			this.sendShellyRequest(method, params)
+		}
+
 		switch (this.config.shellyProduct) {
 			case 0:
-				ShellyMaster.shellyInstance = new ShellyMaster(1, 1)
+				this.shelly = new ShellyMaster(1, 1, sendRequest)
 				break
 			case 1:
-				ShellyMaster.shellyInstance = new ShellyMasterPM(1, 1)
+				this.shelly = new ShellyMasterPM(1, 1, sendRequest)
 				break
 			case 2:
-				ShellyMaster.shellyInstance = new ShellyMasterPM(2, 2)
+				this.shelly = new ShellyMasterPM(2, 2, sendRequest)
 				break
 			case 3:
-				ShellyMaster.shellyInstance = new ShellyMasterCover(1, 2)
+				this.shelly = new ShellyMasterCover(1, 2, sendRequest)
 				break
 			case 4:
-				ShellyMaster.shellyInstance = new ShellyMaster(1, 1)
+				this.shelly = new ShellyMaster(1, 1, sendRequest)
 				break
 			case 5:
-				ShellyMaster.shellyInstance = new ShellyMasterPM(1, 1)
+				this.shelly = new ShellyMasterPM(1, 1, sendRequest)
 				break
 			case 6:
-				ShellyMaster.shellyInstance = new ShellyMaster(2, 2)
+				this.shelly = new ShellyMaster(2, 2, sendRequest)
 				break
 			case 7:
-				ShellyMaster.shellyInstance = new ShellyMasterPM(2, 2)
+				this.shelly = new ShellyMasterPM(2, 2, sendRequest)
 				break
 			case 8:
-				ShellyMaster.shellyInstance = new ShellyMasterCover(1, 2)
+				this.shelly = new ShellyMasterCover(1, 2, sendRequest)
 				break
 			case 9:
-				ShellyMaster.shellyInstance = new ShellyMaster(3, 3)
+				this.shelly = new ShellyMaster(3, 3, sendRequest)
 				break
 			case 10:
-				ShellyMaster.shellyInstance = new ShellyMasterPM(4, 4)
+				this.shelly = new ShellyMasterPM(4, 4, sendRequest)
 				break
 			case 11:
-				ShellyMaster.shellyInstance = new ShellyMasterCover(2, 4)
+				this.shelly = new ShellyMasterCover(2, 4, sendRequest)
 				break
 			case 12:
-				ShellyMaster.shellyInstance = new ShellyMasterInput(4)
+				this.shelly = new ShellyMasterInput(4, sendRequest)
 				break
 		}
 		this.initFeedbacks()
@@ -85,28 +110,35 @@ class WebsocketInstance extends InstanceBase {
 	}
 
 	sendPing() {
-		if (ShellyMaster.ws && ShellyMaster.ws.readyState === 1) {
+		if (this.ws && this.ws.readyState === 1) {
 			this.hasAnsweredPing = false
-			ShellyMaster.ws.ping()
+			this.ws.ping()
 			this.pingTimeout = setTimeout(() => {
 				if (!this.hasAnsweredPing) {
 					this.updateStatus(InstanceStatus.Disconnected, 'Connection lost')
-					if (this.pingInterval) {
-						clearInterval(this.pingInterval)
-						this.pingInterval = null
+					if (this.heartbeatInterval) {
+						clearInterval(this.heartbeatInterval)
+						this.heartbeatInterval = null
 					}
-					this.maybeReconnect() // Rufen Sie die maybeReconnect-Methode auf, wenn keine Pong empfangen wurde
+					this.maybeReconnect()
 				}
 			}, 3000)
 		}
 	}
 
-	initializePingPong() {
-		this.pingInterval = setInterval(() => {
+	startHeartbeat() {
+		let ticks = 0
+		this.heartbeatInterval = setInterval(() => {
+			ticks++
+			if (ticks >= 20) {
+				// 60 seconds
+				this.sendShellyRequest('Shelly.GetStatus')
+				ticks = 0
+			}
 			this.sendPing()
 		}, 3000)
 
-		ShellyMaster.ws.on('pong', () => {
+		this.ws.on('pong', () => {
 			this.hasAnsweredPing = true
 		})
 	}
@@ -123,9 +155,9 @@ class WebsocketInstance extends InstanceBase {
 	}
 
 	initWebSocket() {
-		if (this.pingInterval) {
-			clearTimeout(this.pingInterval)
-			this.pingInterval = null
+		if (this.heartbeatInterval) {
+			clearInterval(this.heartbeatInterval)
+			this.heartbeatInterval = null
 		}
 		if (this.reconnect_timer) {
 			clearTimeout(this.reconnect_timer)
@@ -139,40 +171,52 @@ class WebsocketInstance extends InstanceBase {
 		}
 
 		this.updateStatus(InstanceStatus.Connecting)
-		if (ShellyMaster.ws) {
-			ShellyMaster.ws.close(1000)
-			delete ShellyMaster.ws
+		if (this.ws) {
+			this.ws.removeAllListeners()
+			this.ws.close(1000)
+			this.ws = null
 		}
-		ShellyMaster.auth = null
-		ShellyMaster.ws = new WebSocket(url)
+		this.auth = null
+		this.authAttempted = false
+		this.authSuccess = false
+		this.ws = new WebSocket(url)
 
-		ShellyMaster.ws.on('open', () => {
-			this.updateStatus(InstanceStatus.Ok)
+		this.ws.on('open', () => {
 			if (this.reconnect_timer) {
 				clearTimeout(this.reconnect_timer)
 			}
-			this.initializePingPong()
-			ShellyMaster.ws.send(
-				JSON.stringify({
-					id: 1,
-					src: 'user_1',
-					method: 'Shelly.GetStatus',
-				})
-			)
+			this.startHeartbeat()
+			this.sendShellyRequest('Shelly.GetStatus')
 		})
-		ShellyMaster.ws.on('close', (code) => {
+		this.ws.on('close', (code) => {
 			this.updateStatus(InstanceStatus.Disconnected, `Connection closed with code ${code}`)
 			this.maybeReconnect()
 		})
 
-		ShellyMaster.ws.on('message', async (message) => {
+		this.ws.on('message', async (message) => {
 			try {
 				const data = JSON.parse(message)
 				if (data.error?.code === 401) {
-					console.log('Authentication required, attempting Digest Auth...')
+					// If we've already tried authentication, the password is wrong
+					if (this.authAttempted) {
+						if (this.authSuccess) {
+							this.authAttempted = false
+							this.authSuccess = false
+							this.log('debug', 'Authentication expired, retrying')
+						} else {
+							this.updateStatus(InstanceStatus.ConnectionFailure, 'Authentication failed')
+							return
+						}
+					}
+
+					this.authAttempted = true
+					this.updateStatus(InstanceStatus.Connecting, 'Authenticating')
 
 					const { auth_type, nonce, realm } = JSON.parse(data.error.message)
-					if (auth_type !== 'digest') return console.error('Unsupported authentication type')
+					if (auth_type !== 'digest') {
+						this.updateStatus(InstanceStatus.ConnectionFailure, 'Unsupported authentication type')
+						return
+					}
 
 					const cnonce = Math.floor(Math.random() * 10e8)
 					const username = 'admin',
@@ -184,7 +228,7 @@ class WebsocketInstance extends InstanceBase {
 						.update(`${ha1}:${nonce}:1:${cnonce}:auth:6370ec69915103833b5222b368555393393f098bfbfbb59f47e0590af135f062`)
 						.digest('hex')
 
-					const auth = {
+					this.auth = {
 						realm,
 						username,
 						nonce,
@@ -193,49 +237,62 @@ class WebsocketInstance extends InstanceBase {
 						algorithm: 'SHA-256',
 					}
 
-					ShellyMaster.auth = auth
-
-					const messageToSend = {
-						id: 1,
-						src: 'user_1',
-						method: 'Shelly.GetStatus',
-						auth: auth,
-					}
-
-					setTimeout(() => {
-						try {
-							if (ShellyMaster.ws && ShellyMaster.ws.readyState === WebSocket.OPEN) {
-								ShellyMaster.ws.send(JSON.stringify(messageToSend))
-							}
-						} catch (error) {
-							console.error('Error sending auth message', error)
+					try {
+						if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+							this.sendShellyRequest('Shelly.GetStatus')
 						}
-					}, 1000)
+					} catch (error) {
+						this.log('warn', `Error sending auth message: ${error}`)
+					}
 				} else {
-					this.messageReceivedFromWebSocket(message)
+					this.messageReceivedFromWebSocket(data)
 				}
 			} catch (e) {
-				console.error('Error processing WebSocket message', e)
+				this.log('warn', `Error processing WebSocket message: ${e}`)
 			}
 		})
 
-		ShellyMaster.ws.on('error', (data) => {
-			console.log('error', `WebSocket error: ${data}`)
+		this.ws.on('error', (data) => {
+			this.log('warn', `WebSocket error: ${data}`)
 			this.maybeReconnect()
 		})
 	}
 
-	messageReceivedFromWebSocket(data) {
-		let msgValue = null
-		try {
-			msgValue = JSON.parse(data)
-		} catch {
-			msgValue = data
+	requestId = 1
+
+	sendShellyRequest(method, params) {
+		if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+			const request = {
+				id: this.requestId++,
+				src: 'user_1',
+				method: method,
+			}
+
+			// Only include params if provided
+			if (params !== undefined) {
+				request.params = params
+			}
+
+			// Only include auth if we have it
+			if (this.auth) {
+				request.auth = this.auth
+			}
+
+			this.ws.send(JSON.stringify(request))
 		}
+	}
+
+	messageReceivedFromWebSocket(data) {
+		let msgValue = data
 		if (msgValue != null) {
-			ShellyMaster.shellyInstance.parseIncomingData(msgValue)
+			if (msgValue.result !== undefined || msgValue.method !== undefined) {
+				this.authSuccess = true
+				this.updateStatus(InstanceStatus.Ok)
+			}
+			this.shelly.parseIncomingData(msgValue)
+			const variables = this.shelly.getVariableValues()
 			this.checkFeedbacks()
-			this.setVariableValues(ShellyMaster.shellyInstance.getVariableValues())
+			this.setVariableValues(variables)
 		}
 	}
 
@@ -244,14 +301,15 @@ class WebsocketInstance extends InstanceBase {
 	}
 
 	initFeedbacks() {
-		this.setFeedbackDefinitions(ShellyMaster.shellyInstance.getFeedbackDefinitions())
+		this.setFeedbackDefinitions(this.shelly.getFeedbackDefinitions())
 	}
 
 	initActions() {
-		this.setActionDefinitions(ShellyMaster.shellyInstance.getActionDefinitions())
+		this.setActionDefinitions(this.shelly.getActionDefinitions())
 	}
 	initVariables() {
-		this.setVariableDefinitions(ShellyMaster.shellyInstance.getVariableDefinitions())
+		const defs = this.shelly.getVariableDefinitions()
+		this.setVariableDefinitions(defs)
 	}
 }
 

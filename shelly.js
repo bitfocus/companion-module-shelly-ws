@@ -1,11 +1,8 @@
 class ShellyRelayMaster {
-	static ws = null
-	static shellyInstance = null
-	static auth = null
-
-	constructor(relayCount, inputCount) {
+	constructor(relayCount, inputCount, sendRequest) {
 		this.relayCount = relayCount
 		this.inputCount = inputCount
+		this.sendRequest = sendRequest
 
 		this.relayStates = []
 		this.inputStates = []
@@ -33,8 +30,14 @@ class ShellyRelayMaster {
 		if (data.method == 'NotifyStatus') {
 			for (let i = 0; i < this.relayCount; i++) {
 				const switchKey = `switch:${i}`
-				if (data.params[switchKey]?.output !== undefined) {
-					this.relayStates[i] = data.params[switchKey].output
+				if (data.params[switchKey]) {
+					if (data.params[switchKey].output !== undefined) {
+						this.relayStates[i] = data.params[switchKey].output
+					}
+					if (data.params[switchKey].temperature !== undefined) {
+						this.relayTempsCelsius[i] = data.params[switchKey].temperature.tC
+						this.relayTempsFahrenheit[i] = data.params[switchKey].temperature.tF
+					}
 				}
 			}
 			for (let i = 0; i < this.inputCount; i++) {
@@ -47,17 +50,10 @@ class ShellyRelayMaster {
 	}
 
 	switchRelay(relayId, state) {
-		ShellyRelayMaster.ws.send(
-			JSON.stringify({
-				src: 'user_1',
-				method: 'Switch.Set',
-				params: {
-					id: relayId,
-					on: state == 0 ? true : false,
-				},
-				auth: ShellyRelayMaster.auth,
-			})
-		)
+		this.sendRequest('Switch.Set', {
+			id: relayId,
+			on: state == 0 ? true : false,
+		})
 	}
 
 	getVariableValues() {
@@ -246,7 +242,7 @@ class ShellyRelayMaster {
 					if (this.relayStates[action.options.selectedRelay] === undefined) {
 						this.relayStates[action.options.selectedRelay] = false
 					}
-					var targetState = this.relayStates[action.options.selectedRelay] == true ? 1 : 0
+					const targetState = this.relayStates[action.options.selectedRelay] == true ? 1 : 0
 					this.switchRelay(action.options.selectedRelay, targetState)
 				},
 			},
@@ -255,8 +251,8 @@ class ShellyRelayMaster {
 }
 
 class ShellyRelayMasterPM extends ShellyRelayMaster {
-	constructor(relayCount, inputCount) {
-		super(relayCount, inputCount)
+	constructor(relayCount, inputCount, sendRequest) {
+		super(relayCount, inputCount, sendRequest)
 		this.powerConsumptions = []
 		this.overpowerStates = []
 	}
@@ -296,9 +292,7 @@ class ShellyRelayMasterPM extends ShellyRelayMaster {
 		}
 
 		// Input states
-		for (let i = 0; i < this.inputCount; i++) {
-			variableValues[`input_${i + 1}_state`] = this.inputStates[i]
-		}
+		// Input states are handled by super.getVariableValues()
 
 		return { ...existingValues, ...variableValues }
 	}
@@ -348,16 +342,17 @@ class ShellyRelayMasterPM extends ShellyRelayMaster {
 				},
 			},
 		}
-		var oldFeedbacks = super.getFeedbackDefinitions()
+		const oldFeedbacks = super.getFeedbackDefinitions()
 		Object.assign(oldFeedbacks, newFeedbacks)
 		return oldFeedbacks
 	}
 }
 
 class ShellyMasterCover {
-	constructor(coverCount, inputCount) {
+	constructor(coverCount, inputCount, sendRequest) {
 		this.coverCount = coverCount
 		this.inputCount = inputCount
+		this.sendRequest = sendRequest
 		this.coverPositions = []
 		this.coverStates = []
 		this.powerConsumptions = []
@@ -411,17 +406,17 @@ class ShellyMasterCover {
 	parseIncomingData(data) {
 		if (data.result != null) {
 			for (let i = 0; i < this.coverCount; i++) {
-				const switchKey = `cover:${i}`
-				const switchData = data.result[switchKey]
+				const coverKey = `cover:${i}`
+				const coverData = data.result[coverKey]
 
-				if (switchData !== null && switchData?.current_pos !== undefined) {
-					this.coverPositions[i] = switchData.current_pos
+				if (coverData !== null && coverData?.current_pos !== undefined) {
+					this.coverPositions[i] = coverData.current_pos
 				}
-				if (switchData !== null && switchData?.state !== undefined) {
-					this.coverStates[i] = switchData.state
+				if (coverData !== null && coverData?.state !== undefined) {
+					this.coverStates[i] = coverData.state
 				}
-				if (switchData !== null && switchData?.apower !== undefined) {
-					this.powerConsumptions[i] = switchData.apower
+				if (coverData !== null && coverData?.apower !== undefined) {
+					this.powerConsumptions[i] = coverData.apower
 				}
 			}
 			for (let i = 0; i < this.inputCount; i++) {
@@ -433,17 +428,17 @@ class ShellyMasterCover {
 		}
 		if (data.method != null && data.method == 'NotifyStatus') {
 			for (let i = 0; i < this.coverCount; i++) {
-				const switchKey = `cover:${i}`
-				const switchData = data.params[switchKey]
+				const coverKey = `cover:${i}`
+				const coverData = data.params[coverKey]
 
-				if (switchData !== null && switchData?.apower !== undefined) {
-					this.powerConsumptions[i] = switchData.apower
+				if (coverData !== null && coverData?.apower !== undefined) {
+					this.powerConsumptions[i] = coverData.apower
 				}
-				if (switchData !== null && switchData?.current_pos !== undefined) {
-					this.coverPositions[i] = switchData.current_pos
+				if (coverData !== null && coverData?.current_pos !== undefined) {
+					this.coverPositions[i] = coverData.current_pos
 				}
-				if (switchData !== null && switchData?.state !== undefined) {
-					this.coverStates[i] = switchData.state
+				if (coverData !== null && coverData?.state !== undefined) {
+					this.coverStates[i] = coverData.state
 				}
 			}
 			for (let i = 0; i < this.inputCount; i++) {
@@ -456,54 +451,26 @@ class ShellyMasterCover {
 	}
 
 	openCover(coverId) {
-		ShellyRelayMaster.ws.send(
-			JSON.stringify({
-				src: 'user_1',
-				method: 'Cover.Open',
-				params: {
-					id: coverId,
-				},
-				auth: ShellyRelayMaster.auth,
-			})
-		)
+		this.sendRequest('Cover.Open', {
+			id: coverId,
+		})
 	}
 
 	closeCover(coverId) {
-		ShellyRelayMaster.ws.send(
-			JSON.stringify({
-				src: 'user_1',
-				method: 'Cover.Close',
-				params: {
-					id: coverId,
-				},
-				auth: ShellyRelayMaster.auth,
-			})
-		)
+		this.sendRequest('Cover.Close', {
+			id: coverId,
+		})
 	}
 	stopCover(coverId) {
-		ShellyRelayMaster.ws.send(
-			JSON.stringify({
-				src: 'user_1',
-				method: 'Cover.Stop',
-				params: {
-					id: coverId,
-				},
-				auth: ShellyRelayMaster.auth,
-			})
-		)
+		this.sendRequest('Cover.Stop', {
+			id: coverId,
+		})
 	}
 	goToPosition(coverId, pos) {
-		ShellyRelayMaster.ws.send(
-			JSON.stringify({
-				src: 'user_1',
-				method: 'Cover.GoToPosition',
-				params: {
-					id: coverId,
-					pos: pos,
-				},
-				auth: ShellyRelayMaster.auth,
-			})
-		)
+		this.sendRequest('Cover.GoToPosition', {
+			id: coverId,
+			pos: pos,
+		})
 	}
 
 	getActionDefinitions() {
@@ -711,8 +678,9 @@ class ShellyMasterCover {
 }
 
 class ShellyMasterInput {
-	constructor(inputCount) {
+	constructor(inputCount, sendRequest) {
 		this.inputCount = inputCount
+		this.sendRequest = sendRequest
 		this.inputStates = []
 	}
 
