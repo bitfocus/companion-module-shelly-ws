@@ -1,6 +1,6 @@
 {
 	"name": "shelly-ws",
-	"version": "1.1.1",
+	"version": "1.1.2",
 	"main": "index.js",
 	"type": "module",
 	"scripts": {
