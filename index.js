@@ -16,6 +16,7 @@ class WebsocketInstance extends InstanceBase {
 	requestId = 1
 
 	async init(config) {
+		this.isInitialized = true
 		this.config = config
 		this.setupInstance()
 		this.initWebSocket()
@@ -139,6 +140,10 @@ class WebsocketInstance extends InstanceBase {
 
 		this.ws.on('pong', () => {
 			this.hasAnsweredPing = true
+			if (this.pingTimeout) {
+				clearTimeout(this.pingTimeout)
+				this.pingTimeout = null
+			}
 		})
 	}
 
@@ -184,7 +189,6 @@ class WebsocketInstance extends InstanceBase {
 			if (this.reconnect_timer) {
 				clearTimeout(this.reconnect_timer)
 			}
-			this.isInitialized = true
 			this.updateStatus(InstanceStatus.Ok)
 			this.startHeartbeat()
 			this.sendShellyRequest('Shelly.GetStatus')

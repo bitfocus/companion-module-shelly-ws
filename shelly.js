@@ -706,7 +706,7 @@ class ShellyMasterInput {
 	getVariableValues() {
 		const variableValues = {}
 
-		// Relay states
+		// Input states
 		for (let i = 0; i < this.inputCount; i++) {
 			variableValues[`input_${i + 1}_state`] = this.inputStates[i] != undefined ? this.inputStates[i] : false
 		}
@@ -717,7 +717,7 @@ class ShellyMasterInput {
 	getVariableDefinitions() {
 		const variables = []
 
-		// Relay States
+		// Input states
 		for (let i = 0; i < this.inputCount; i++) {
 			variables.push({
 				name: `Input ${i + 1} State`,
