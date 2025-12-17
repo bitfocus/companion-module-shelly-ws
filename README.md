@@ -1,2 +1,3 @@
-# companion-module-shelly-http
+# companion-module-shelly-ws
+
 See HELP.md and LICENSE

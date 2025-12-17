@@ -1,276 +1,321 @@
-import {
-  InstanceBase,
-  runEntrypoint,
-  InstanceStatus,
-  combineRgb,
-} from "@companion-module/base";
-import WebSocket from "ws";
-import { upgradeScripts } from "./upgrade.js";
-import {
-  ShellyMaster,
-  ShellyMasterCover,
-  ShellyMasterPM,
-  ShellyMasterInput,
-} from "./shelly.js";
-import { configFields } from "./config.js";
-import * as crypto from "crypto";
+import { InstanceBase, runEntrypoint, InstanceStatus } from '@companion-module/base'
+import WebSocket from 'ws'
+import { upgradeScripts } from './upgrade.js'
+import { ShellyMaster, ShellyMasterCover, ShellyMasterPM, ShellyMasterInput } from './shelly.js'
+import { configFields } from './config.js'
+import * as crypto from 'crypto'
 
 class WebsocketInstance extends InstanceBase {
-  isInitialized = false;
+	isInitialized = false
+	ws = null
+	auth = null
+	shelly = null
+	authAttempted = false
+	authSuccess = false
+	heartbeatInterval = null
+	requestId = 1
 
-  async init(config) {
-    this.config = config;
-    this.keepAlive = true;
-    this.setupInstance();
-    this.isInitialized = true;
-    this.initWebSocket();
-  }
+	async init(config) {
+		this.isInitialized = true
+		this.config = config
+		this.setupInstance()
+		this.initWebSocket()
+	}
 
-  async destroy() {
-    this.isInitialized = false;
-    if (this.reconnect_timer) {
-      clearTimeout(this.reconnect_timer);
-      this.reconnect_timer = null;
-    }
-    if (ShellyMaster.ws) {
-      ShellyMaster.ws.close(1000);
-      delete ShellyMaster.ws;
-    }
-  }
+	async destroy() {
+		this.isInitialized = false
+		if (this.reconnect_timer) {
+			clearTimeout(this.reconnect_timer)
+			this.reconnect_timer = null
+		}
+		if (this.heartbeatInterval) {
+			clearInterval(this.heartbeatInterval)
+			this.heartbeatInterval = null
+		}
+		if (this.ws) {
+			this.ws.removeAllListeners()
+			// Add error handler to prevent unhandled errors during close
+			this.ws.on('error', () => {
+				// Ignore errors during shutdown
+			})
+			try {
+				// Only close if the connection is open or connecting
+				if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+					this.ws.close(1000)
+				}
+			} catch {
+				// Ignore errors during shutdown
+			}
+			this.ws = null
+		}
+	}
 
-  setupInstance() {
-    delete ShellyMaster.shellyInstance;
-    switch (this.config.shellyProduct) {
-      case 0:
-        ShellyMaster.shellyInstance = new ShellyMaster(1, 1);
-        break;
-      case 1:
-        ShellyMaster.shellyInstance = new ShellyMasterPM(1, 1);
-        break;
-      case 2:
-        ShellyMaster.shellyInstance = new ShellyMasterPM(2, 2);
-        break;
-      case 3:
-        ShellyMaster.shellyInstance = new ShellyMasterCover(1, 2);
-        break;
-      case 4:
-        ShellyMaster.shellyInstance = new ShellyMaster(1, 1);
-        break;
-      case 5:
-        ShellyMaster.shellyInstance = new ShellyMasterPM(1, 1);
-        break;
-      case 6:
-        ShellyMaster.shellyInstance = new ShellyMaster(2, 2);
-        break;
-      case 7:
-        ShellyMaster.shellyInstance = new ShellyMasterPM(2, 2);
-        break;
-      case 8:
-        ShellyMaster.shellyInstance = new ShellyMasterCover(1, 2);
-        break;
-      case 9:
-        ShellyMaster.shellyInstance = new ShellyMaster(3, 3);
-        break;
-      case 10:
-        ShellyMaster.shellyInstance = new ShellyMasterPM(4, 4);
-        break;
-      case 11:
-        ShellyMaster.shellyInstance = new ShellyMasterCover(2, 4);
-        break;
-      case 12:
-        ShellyMaster.shellyInstance = new ShellyMasterInput(4);
-        break;
-    }
-    this.initFeedbacks();
-    this.initActions();
-    this.initVariables();
-  }
+	setupInstance() {
+		const sendRequest = (method, params) => {
+			this.sendShellyRequest(method, params)
+		}
 
-  async configUpdated(config) {
-    this.config = config;
+		switch (this.config.shellyProduct) {
+			case 0:
+				this.shelly = new ShellyMaster(1, 1, sendRequest)
+				break
+			case 1:
+				this.shelly = new ShellyMasterPM(1, 1, sendRequest)
+				break
+			case 2:
+				this.shelly = new ShellyMasterPM(2, 2, sendRequest)
+				break
+			case 3:
+				this.shelly = new ShellyMasterCover(1, 2, sendRequest)
+				break
+			case 4:
+				this.shelly = new ShellyMaster(1, 1, sendRequest)
+				break
+			case 5:
+				this.shelly = new ShellyMasterPM(1, 1, sendRequest)
+				break
+			case 6:
+				this.shelly = new ShellyMaster(2, 2, sendRequest)
+				break
+			case 7:
+				this.shelly = new ShellyMasterPM(2, 2, sendRequest)
+				break
+			case 8:
+				this.shelly = new ShellyMasterCover(1, 2, sendRequest)
+				break
+			case 9:
+				this.shelly = new ShellyMaster(3, 3, sendRequest)
+				break
+			case 10:
+				this.shelly = new ShellyMasterPM(4, 4, sendRequest)
+				break
+			case 11:
+				this.shelly = new ShellyMasterCover(2, 4, sendRequest)
+				break
+			case 12:
+				this.shelly = new ShellyMasterInput(4, sendRequest)
+				break
+		}
+		this.initFeedbacks()
+		this.initActions()
+		this.initVariables()
+	}
 
-    this.setupInstance();
+	async configUpdated(config) {
+		this.config = config
 
-    this.initWebSocket();
-  }
+		this.setupInstance()
 
-  sendPing() {
-    if (ShellyMaster.ws && ShellyMaster.ws.readyState === 1) {
-      this.hasAnsweredPing = false;
-      ShellyMaster.ws.ping();
-      this.pingTimeout = setTimeout(() => {
-        if (!this.hasAnsweredPing) {
-          this.updateStatus(InstanceStatus.Disconnected, "Connection lost");
-          if (this.pingInterval) {
-            clearInterval(this.pingInterval);
-            this.pingInterval = null;
-          }
-          this.maybeReconnect(); // Rufen Sie die maybeReconnect-Methode auf, wenn keine Pong empfangen wurde
-        }
-      }, 3000);
-    }
-  }
+		this.initWebSocket()
+	}
 
-  initializePingPong() {
-    this.pingInterval = setInterval(() => {
-      this.sendPing();
-    }, 3000);
+	sendPing() {
+		if (this.ws && this.ws.readyState === 1) {
+			this.hasAnsweredPing = false
+			this.ws.ping()
+			this.pingTimeout = setTimeout(() => {
+				if (!this.hasAnsweredPing) {
+					this.updateStatus(InstanceStatus.Disconnected, 'Connection lost')
+					if (this.heartbeatInterval) {
+						clearInterval(this.heartbeatInterval)
+						this.heartbeatInterval = null
+					}
+					this.maybeReconnect()
+				}
+			}, 3000)
+		}
+	}
 
-    ShellyMaster.ws.on("pong", () => {
-      this.hasAnsweredPing = true;
-    });
-  }
+	startHeartbeat() {
+		let ticks = 0
+		this.heartbeatInterval = setInterval(() => {
+			ticks++
+			if (ticks >= 20) {
+				// 60 seconds
+				this.sendShellyRequest('Shelly.GetStatus')
+				ticks = 0
+			}
+			this.sendPing()
+		}, 3000)
 
-  maybeReconnect() {
-    if (this.isInitialized && this.config.reconnect) {
-      if (this.reconnect_timer) {
-        clearTimeout(this.reconnect_timer);
-      }
-      this.reconnect_timer = setTimeout(() => {
-        this.initWebSocket();
-      }, 5000);
-    }
-  }
+		this.ws.on('pong', () => {
+			this.hasAnsweredPing = true
+			if (this.pingTimeout) {
+				clearTimeout(this.pingTimeout)
+				this.pingTimeout = null
+			}
+		})
+	}
 
-  initWebSocket() {
-    if (this.pingInterval) {
-      clearTimeout(this.pingInterval);
-      this.pingInterval = null;
-    }
-    if (this.reconnect_timer) {
-      clearTimeout(this.reconnect_timer);
-      this.reconnect_timer = null;
-    }
+	maybeReconnect() {
+		if (this.isInitialized && this.config.reconnect) {
+			if (this.reconnect_timer) {
+				clearTimeout(this.reconnect_timer)
+			}
+			this.reconnect_timer = setTimeout(() => {
+				this.initWebSocket()
+			}, 5000)
+		}
+	}
 
-    const url = "ws://" + this.config.targetIp + "/rpc";
-    if (!url || !this.config.targetIp) {
-      this.updateStatus(InstanceStatus.BadConfig, `IP is missing`);
-      return;
-    }
+	initWebSocket() {
+		if (this.heartbeatInterval) {
+			clearInterval(this.heartbeatInterval)
+			this.heartbeatInterval = null
+		}
+		if (this.reconnect_timer) {
+			clearTimeout(this.reconnect_timer)
+			this.reconnect_timer = null
+		}
 
-    this.updateStatus(InstanceStatus.Connecting);
-    if (ShellyMaster.ws) {
-      ShellyMaster.ws.close(1000);
-      delete ShellyMaster.ws;
-    }
-    ShellyMaster.ws = new WebSocket(url);
+		const url = 'ws://' + this.config.targetIp + '/rpc'
+		if (!url || !this.config.targetIp) {
+			this.updateStatus(InstanceStatus.BadConfig, `IP is missing`)
+			return
+		}
 
-    ShellyMaster.ws.on("open", () => {
-      this.updateStatus(InstanceStatus.Ok);
-      if (this.reconnect_timer) {
-        clearTimeout(this.reconnect_timer);
-      }
-      this.initializePingPong();
-      ShellyMaster.ws.send(
-        JSON.stringify({
-          id: 1,
-          src: "user_1",
-          method: "Shelly.GetStatus",
-        })
-      );
-    });
-    ShellyMaster.ws.on("close", (code) => {
-      this.updateStatus(
-        InstanceStatus.Disconnected,
-        `Connection closed with code ${code}`
-      );
-      this.maybeReconnect();
-    });
+		this.updateStatus(InstanceStatus.Connecting)
+		if (this.ws) {
+			this.ws.removeAllListeners()
+			this.ws.close(1000)
+			this.ws = null
+		}
+		this.auth = null
+		this.authAttempted = false
+		this.authSuccess = false
+		this.ws = new WebSocket(url)
 
-    ShellyMaster.ws.on("message", async (message) => {
-      try {
-        const data = JSON.parse(message);
-        if (data.error?.code === 401) {
-          console.log("Authentication required, attempting Digest Auth...");
+		this.ws.on('open', () => {
+			if (this.reconnect_timer) {
+				clearTimeout(this.reconnect_timer)
+			}
+			this.updateStatus(InstanceStatus.Ok)
+			this.startHeartbeat()
+			this.sendShellyRequest('Shelly.GetStatus')
+		})
+		this.ws.on('close', (code) => {
+			this.updateStatus(InstanceStatus.Disconnected, `Connection closed with code ${code}`)
+			this.maybeReconnect()
+		})
 
-          const { auth_type, nonce, realm } = JSON.parse(data.error.message);
-          if (auth_type !== "digest")
-            return console.error("Unsupported authentication type");
+		this.ws.on('message', async (message) => {
+			try {
+				const data = JSON.parse(message)
+				if (data.error?.code === 401) {
+					// If we've already tried authentication, the password is wrong
+					if (this.authAttempted) {
+						if (this.authSuccess) {
+							this.authAttempted = false
+							this.authSuccess = false
+							this.log('debug', 'Authentication expired, retrying')
+						} else {
+							this.updateStatus(InstanceStatus.ConnectionFailure, 'Authentication failed')
+							return
+						}
+					}
 
-          const cnonce = Math.floor(Math.random() * 10e8);
-          const username = "admin",
-            password = this.config.password;
-          const ha1 = crypto
-            .createHash("sha256")
-            .update([username, realm, password].join(":"))
-            .digest("hex");
+					this.authAttempted = true
+					this.updateStatus(InstanceStatus.Connecting, 'Authenticating')
 
-          const response = crypto
-            .createHash("sha256")
-            .update(
-              `${ha1}:${nonce}:1:${cnonce}:auth:6370ec69915103833b5222b368555393393f098bfbfbb59f47e0590af135f062`
-            )
-            .digest("hex");
+					const { auth_type, nonce, realm } = JSON.parse(data.error.message)
+					if (auth_type !== 'digest') {
+						this.updateStatus(InstanceStatus.ConnectionFailure, 'Unsupported authentication type')
+						return
+					}
 
-          const auth = {
-            realm,
-            username,
-            nonce,
-            cnonce,
-            response,
-            algorithm: "SHA-256",
-          };
+					const cnonce = Math.floor(Math.random() * 10e8)
+					const username = 'admin',
+						password = this.config.password
+					const ha1 = crypto.createHash('sha256').update([username, realm, password].join(':')).digest('hex')
 
-          ShellyMaster.auth = auth;
+					const response = crypto
+						.createHash('sha256')
+						.update(`${ha1}:${nonce}:1:${cnonce}:auth:6370ec69915103833b5222b368555393393f098bfbfbb59f47e0590af135f062`)
+						.digest('hex')
 
-          const messageToSend = {
-            id: 1,
-            src: "user_1",
-            method: "Shelly.GetStatus",
-            auth: auth,
-          };
+					this.auth = {
+						realm,
+						username,
+						nonce,
+						cnonce,
+						response,
+						algorithm: 'SHA-256',
+					}
 
-          setTimeout(() => {
-            ShellyMaster.ws.send(JSON.stringify(messageToSend));
-          }, 1000);
-        } else {
-          this.messageReceivedFromWebSocket(message);
-        }
-      } catch (e) {
-        console.error("Error processing WebSocket message", e);
-      }
-    });
+					try {
+						if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+							this.sendShellyRequest('Shelly.GetStatus')
+						}
+					} catch (error) {
+						this.log('warn', `Error sending auth message: ${error}`)
+					}
+				} else {
+					this.messageReceivedFromWebSocket(data)
+				}
+			} catch (e) {
+				this.log('warn', `Error processing WebSocket message: ${e}`)
+			}
+		})
 
-    ShellyMaster.ws.on("error", (data) => {
-      console.log("error", `WebSocket error: ${data}`);
-      this.maybeReconnect();
-    });
-  }
+		this.ws.on('error', (data) => {
+			this.log('warn', `WebSocket error: ${data}`)
+			this.maybeReconnect()
+		})
+	}
 
-  messageReceivedFromWebSocket(data) {
-    let msgValue = null;
-    try {
-      msgValue = JSON.parse(data);
-    } catch (e) {
-      msgValue = data;
-    }
-    if (msgValue != null) {
-      ShellyMaster.shellyInstance.parseIncomingData(msgValue);
-      this.checkFeedbacks();
-      this.setVariableValues(ShellyMaster.shellyInstance.getVariableValues());
-    }
-  }
+	sendShellyRequest(method, params) {
+		if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+			const request = {
+				id: this.requestId++,
+				src: 'user_1',
+				method: method,
+			}
 
-  getConfigFields() {
-    return configFields;
-  }
+			// Only include params if provided
+			if (params !== undefined) {
+				request.params = params
+			}
 
-  initFeedbacks() {
-    this.setFeedbackDefinitions(
-      ShellyMaster.shellyInstance.getFeedbackDefinitions()
-    );
-  }
+			// Only include auth if we have it
+			if (this.auth) {
+				request.auth = this.auth
+			}
 
-  initActions() {
-    this.setActionDefinitions(
-      ShellyMaster.shellyInstance.getActionDefinitions()
-    );
-  }
-  initVariables() {
-    this.setVariableDefinitions(
-      ShellyMaster.shellyInstance.getVariableDefinitions()
-    );
-  }
+			this.ws.send(JSON.stringify(request))
+		}
+	}
+
+	messageReceivedFromWebSocket(data) {
+		let msgValue = data
+		if (msgValue != null) {
+			if (msgValue.result !== undefined || msgValue.method !== undefined) {
+				if (this.authSuccess === false) {
+					this.updateStatus(InstanceStatus.Ok)
+				}
+				this.authSuccess = true
+			}
+			this.shelly.parseIncomingData(msgValue)
+			const variables = this.shelly.getVariableValues()
+			this.checkFeedbacks()
+			this.setVariableValues(variables)
+		}
+	}
+
+	getConfigFields() {
+		return configFields
+	}
+
+	initFeedbacks() {
+		this.setFeedbackDefinitions(this.shelly.getFeedbackDefinitions())
+	}
+
+	initActions() {
+		this.setActionDefinitions(this.shelly.getActionDefinitions())
+	}
+	initVariables() {
+		const defs = this.shelly.getVariableDefinitions()
+		this.setVariableDefinitions(defs)
+	}
 }
 
-runEntrypoint(WebsocketInstance, upgradeScripts);
+runEntrypoint(WebsocketInstance, upgradeScripts)
