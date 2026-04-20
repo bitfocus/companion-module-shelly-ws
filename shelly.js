@@ -1,4 +1,3 @@
-- Global reboot action for all supported device types
 function getRebootActionDefinition(rebootFn) {
 	return {
 		rebootDevice: {
