@@ -31,7 +31,8 @@
 		"Shelly Pro 3",
 		"Shelly Pro 4PM",
 		"Shelly Pro Dual Cover PM",
-		"Shelly Plus I4"
+		"Shelly Plus I4",
+		"Shelly 0/1-10V PM Dimmer (Pro / Gen3)"
 	],
 	"keywords": ["Shelly", "Relay"]
 }

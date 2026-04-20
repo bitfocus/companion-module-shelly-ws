@@ -1,3 +1,26 @@
+- Global reboot action for all supported device types
+function getRebootActionDefinition(rebootFn) {
+	return {
+		rebootDevice: {
+			name: 'Reboot Shelly device',
+			description: 'Reboots the Shelly device and temporarily disconnects the module',
+			options: [
+				{
+					type: 'number',
+					label: 'Delay (ms)',
+					id: 'delayMs',
+					default: 1000,
+					min: 500,
+					max: 60000,
+				},
+			],
+			callback: async (action) => {
+				rebootFn(action.options.delayMs)
+			},
+		},
+	}
+}
+
 class ShellyRelayMaster {
 	constructor(relayCount, inputCount, sendRequest) {
 		this.relayCount = relayCount
@@ -26,7 +49,15 @@ class ShellyRelayMaster {
 					}
 				}
 			}
+
+			for (let i = 0; i < this.inputCount; i++) {
+				const inputKey = `input:${i}`
+				if (data.result[inputKey]?.state !== undefined) {
+					this.inputStates[i] = data.result[inputKey].state
+				}
+			}
 		}
+
 		if (data.method == 'NotifyStatus') {
 			for (let i = 0; i < this.relayCount; i++) {
 				const switchKey = `switch:${i}`
@@ -40,6 +71,7 @@ class ShellyRelayMaster {
 					}
 				}
 			}
+
 			for (let i = 0; i < this.inputCount; i++) {
 				const inputKey = `input:${i}`
 				if (data.params[inputKey]?.state !== undefined) {
@@ -56,17 +88,23 @@ class ShellyRelayMaster {
 		})
 	}
 
+	rebootDevice(delayMs = 1000) {
+		const safeDelay = Math.max(500, Number(delayMs) || 1000)
+
+		this.sendRequest('Shelly.Reboot', {
+			delay_ms: safeDelay,
+		})
+	}
+
 	getVariableValues() {
 		const variableValues = {}
 
-		// Relay states
 		for (let i = 0; i < this.relayCount; i++) {
 			variableValues[`relay_${i + 1}_state`] = this.relayStates[i]
 			variableValues[`relay_${i + 1}_temp_c`] = this.relayTempsCelsius[i]
 			variableValues[`relay_${i + 1}_temp_f`] = this.relayTempsFahrenheit[i]
 		}
 
-		// Input states
 		for (let i = 0; i < this.inputCount; i++) {
 			variableValues[`input_${i + 1}_state`] = this.inputStates[i] != undefined ? this.inputStates[i] : false
 		}
@@ -246,6 +284,7 @@ class ShellyRelayMaster {
 					this.switchRelay(action.options.selectedRelay, targetState)
 				},
 			},
+			...getRebootActionDefinition(this.rebootDevice.bind(this)),
 		}
 	}
 }
@@ -259,6 +298,7 @@ class ShellyRelayMasterPM extends ShellyRelayMaster {
 
 	parseIncomingData(data) {
 		super.parseIncomingData(data)
+
 		if (data.result != null) {
 			for (let i = 0; i < this.relayCount; i++) {
 				const switchKey = `switch:${i}`
@@ -269,6 +309,7 @@ class ShellyRelayMasterPM extends ShellyRelayMaster {
 				}
 			}
 		}
+
 		if (data.method != null && data.method == 'NotifyStatus') {
 			for (let i = 0; i < this.relayCount; i++) {
 				const switchKey = `switch:${i}`
@@ -285,14 +326,10 @@ class ShellyRelayMasterPM extends ShellyRelayMaster {
 		const existingValues = super.getVariableValues()
 		const variableValues = {}
 
-		// Relay states
 		for (let i = 0; i < this.relayCount; i++) {
 			variableValues[`relay_${i + 1}_consumption`] = this.powerConsumptions[i]
 			variableValues[`relay_${i + 1}_overpower`] = this.overpowerStates[i]
 		}
-
-		// Input states
-		// Input states are handled by super.getVariableValues()
 
 		return { ...existingValues, ...variableValues }
 	}
@@ -301,7 +338,6 @@ class ShellyRelayMasterPM extends ShellyRelayMaster {
 		const existingVars = super.getVariableDefinitions()
 		const variables = []
 
-		// Relay States
 		for (let i = 0; i < this.relayCount; i++) {
 			variables.push({
 				name: `Relay ${i + 1} Power Consumption`,
@@ -321,6 +357,7 @@ class ShellyRelayMasterPM extends ShellyRelayMaster {
 			id: index,
 			label: `Relay ${index + 1}`,
 		}))
+
 		const newFeedbacks = {
 			powerConsumption: {
 				type: 'advanced',
@@ -337,11 +374,12 @@ class ShellyRelayMasterPM extends ShellyRelayMaster {
 				],
 				callback: (feedback) => {
 					return {
-						text: this.powerConsumptions[feedback.options.selectedRelay] + ' W',
+						text: `${this.powerConsumptions[feedback.options.selectedRelay] ?? 0} W`,
 					}
 				},
 			},
 		}
+
 		const oldFeedbacks = super.getFeedbackDefinitions()
 		Object.assign(oldFeedbacks, newFeedbacks)
 		return oldFeedbacks
@@ -357,6 +395,14 @@ class ShellyMasterCover {
 		this.coverStates = []
 		this.powerConsumptions = []
 		this.inputStates = []
+	}
+
+	rebootDevice(delayMs = 1000) {
+		const safeDelay = Math.max(500, Number(delayMs) || 1000)
+
+		this.sendRequest('Shelly.Reboot', {
+			delay_ms: safeDelay,
+		})
 	}
 
 	getVariableDefinitions() {
@@ -419,6 +465,7 @@ class ShellyMasterCover {
 					this.powerConsumptions[i] = coverData.apower
 				}
 			}
+
 			for (let i = 0; i < this.inputCount; i++) {
 				const inputKey = `input:${i}`
 				if (data.result[inputKey]?.state !== undefined) {
@@ -426,6 +473,7 @@ class ShellyMasterCover {
 				}
 			}
 		}
+
 		if (data.method != null && data.method == 'NotifyStatus') {
 			for (let i = 0; i < this.coverCount; i++) {
 				const coverKey = `cover:${i}`
@@ -441,6 +489,7 @@ class ShellyMasterCover {
 					this.coverStates[i] = coverData.state
 				}
 			}
+
 			for (let i = 0; i < this.inputCount; i++) {
 				const inputKey = `input:${i}`
 				if (data.params[inputKey]?.state !== undefined) {
@@ -461,11 +510,13 @@ class ShellyMasterCover {
 			id: coverId,
 		})
 	}
+
 	stopCover(coverId) {
 		this.sendRequest('Cover.Stop', {
 			id: coverId,
 		})
 	}
+
 	goToPosition(coverId, pos) {
 		this.sendRequest('Cover.GoToPosition', {
 			id: coverId,
@@ -543,6 +594,7 @@ class ShellyMasterCover {
 					this.goToPosition(action.options.selectedCover, action.options.targetPosition)
 				},
 			},
+			...getRebootActionDefinition(this.rebootDevice.bind(this)),
 		}
 	}
 
@@ -581,7 +633,7 @@ class ShellyMasterCover {
 				],
 				callback: (feedback) => {
 					return {
-						text: this.coverPositions[feedback.options.selectedCover] + '%',
+						text: `${this.coverPositions[feedback.options.selectedCover] ?? 0}%`,
 					}
 				},
 			},
@@ -625,15 +677,17 @@ class ShellyMasterCover {
 				callback: (feedback) => {
 					switch (feedback.options.selectedCoverState) {
 						case 0:
-							return this.coverStates[feedback.options.selectedCover] == 'opening' ? true : false
+							return this.coverStates[feedback.options.selectedCover] == 'opening'
 						case 1:
-							return this.coverStates[feedback.options.selectedCover] == 'open' ? true : false
+							return this.coverStates[feedback.options.selectedCover] == 'open'
 						case 2:
-							return this.coverStates[feedback.options.selectedCover] == 'closing' ? true : false
+							return this.coverStates[feedback.options.selectedCover] == 'closing'
 						case 3:
-							return this.coverStates[feedback.options.selectedCover] == 'closed' ? true : false
+							return this.coverStates[feedback.options.selectedCover] == 'closed'
 						case 4:
-							return this.coverStates[feedback.options.selectedCover] == 'stopped' ? true : false
+							return this.coverStates[feedback.options.selectedCover] == 'stopped'
+						default:
+							return false
 					}
 				},
 			},
@@ -669,7 +723,7 @@ class ShellyMasterCover {
 				],
 				callback: (feedback) => {
 					return {
-						text: this.powerConsumptions[feedback.options.selectedCover] + ' W',
+						text: `${this.powerConsumptions[feedback.options.selectedCover] ?? 0} W`,
 					}
 				},
 			},
@@ -693,6 +747,7 @@ class ShellyMasterInput {
 				}
 			}
 		}
+
 		if (data.method != null && data.method == 'NotifyStatus') {
 			for (let i = 0; i < this.inputCount; i++) {
 				const inputKey = `input:${i}`
@@ -703,10 +758,17 @@ class ShellyMasterInput {
 		}
 	}
 
+	rebootDevice(delayMs = 1000) {
+		const safeDelay = Math.max(500, Number(delayMs) || 1000)
+
+		this.sendRequest('Shelly.Reboot', {
+			delay_ms: safeDelay,
+		})
+	}
+
 	getVariableValues() {
 		const variableValues = {}
 
-		// Input states
 		for (let i = 0; i < this.inputCount; i++) {
 			variableValues[`input_${i + 1}_state`] = this.inputStates[i] != undefined ? this.inputStates[i] : false
 		}
@@ -717,7 +779,6 @@ class ShellyMasterInput {
 	getVariableDefinitions() {
 		const variables = []
 
-		// Input states
 		for (let i = 0; i < this.inputCount; i++) {
 			variables.push({
 				name: `Input ${i + 1} State`,
@@ -729,7 +790,9 @@ class ShellyMasterInput {
 	}
 
 	getActionDefinitions() {
-		return {}
+		return {
+			...getRebootActionDefinition(this.rebootDevice.bind(this)),
+		}
 	}
 
 	getFeedbackDefinitions() {
@@ -737,6 +800,7 @@ class ShellyMasterInput {
 			id: index,
 			label: `Input ${index + 1}`,
 		}))
+
 		return {
 			inputState: {
 				type: 'boolean',
@@ -759,9 +823,388 @@ class ShellyMasterInput {
 	}
 }
 
+class ShellyMasterDimmer {
+	constructor(channelCount, inputCount, sendRequest) {
+		this.channelCount = channelCount
+		this.inputCount = inputCount
+		this.sendRequest = sendRequest
+
+		this.channelStates = []
+		this.channelLevels = []
+		this.powerConsumptions = []
+		this.channelTempsCelsius = []
+		this.channelTempsFahrenheit = []
+		this.inputStates = []
+	}
+
+	parseIncomingData(data) {
+		const parseBlock = (source) => {
+			if (!source) return
+
+			for (let i = 0; i < this.channelCount; i++) {
+				const lightKey = `light:${i}`
+				const switchKey = `switch:${i}`
+
+				const channelData = source[lightKey] ?? source[switchKey]
+				if (!channelData) continue
+
+				if (channelData.output !== undefined) {
+					this.channelStates[i] = channelData.output
+				}
+
+				if (channelData.brightness !== undefined) {
+					this.channelLevels[i] = channelData.brightness
+				} else if (channelData.percent !== undefined) {
+					this.channelLevels[i] = channelData.percent
+				} else if (channelData.level !== undefined) {
+					this.channelLevels[i] = channelData.level
+				} else if (channelData.current !== undefined) {
+					this.channelLevels[i] = channelData.current
+				}
+
+				if (channelData.apower !== undefined) {
+					this.powerConsumptions[i] = channelData.apower
+				}
+
+				if (channelData.temperature !== undefined) {
+					this.channelTempsCelsius[i] = channelData.temperature.tC
+					this.channelTempsFahrenheit[i] = channelData.temperature.tF
+				}
+			}
+
+			for (let i = 0; i < this.inputCount; i++) {
+				const inputKey = `input:${i}`
+				if (source[inputKey]?.state !== undefined) {
+					this.inputStates[i] = source[inputKey].state
+				}
+			}
+		}
+
+		if (data.result != null) {
+			parseBlock(data.result)
+		}
+
+		if (data.method === 'NotifyStatus' && data.params != null) {
+			parseBlock(data.params)
+		}
+	}
+
+	setDimmerState(channelId, state) {
+		this.sendRequest('Light.Set', {
+			id: channelId,
+			on: state,
+		})
+	}
+
+	rebootDevice(delayMs = 1000) {
+		const safeDelay = Math.max(500, Number(delayMs) || 1000)
+
+		this.sendRequest('Shelly.Reboot', {
+			delay_ms: safeDelay,
+		})
+	}
+
+	setDimmerLevel(channelId, level) {
+		const safeLevel = Math.max(0, Math.min(100, Number(level)))
+
+		this.sendRequest('Light.Set', {
+			id: channelId,
+			on: safeLevel > 0,
+			brightness: safeLevel,
+		})
+	}
+
+	stepDimmerLevel(channelId, delta) {
+		const current = Number(this.channelLevels[channelId] ?? 0)
+		const target = Math.max(0, Math.min(100, current + Number(delta)))
+		this.setDimmerLevel(channelId, target)
+	}
+
+	getVariableValues() {
+		const variableValues = {}
+
+		for (let i = 0; i < this.channelCount; i++) {
+			variableValues[`dimmer_${i + 1}_state`] = this.channelStates[i]
+			variableValues[`dimmer_${i + 1}_level`] = this.channelLevels[i]
+			variableValues[`dimmer_${i + 1}_consumption`] = this.powerConsumptions[i]
+			variableValues[`dimmer_${i + 1}_temp_c`] = this.channelTempsCelsius[i]
+			variableValues[`dimmer_${i + 1}_temp_f`] = this.channelTempsFahrenheit[i]
+		}
+
+		for (let i = 0; i < this.inputCount; i++) {
+			variableValues[`input_${i + 1}_state`] = this.inputStates[i] != undefined ? this.inputStates[i] : false
+		}
+
+		return variableValues
+	}
+
+	getVariableDefinitions() {
+		const variables = []
+
+		for (let i = 0; i < this.channelCount; i++) {
+			variables.push({
+				name: `Dimmer ${i + 1} State`,
+				variableId: `dimmer_${i + 1}_state`,
+			})
+			variables.push({
+				name: `Dimmer ${i + 1} Level (%)`,
+				variableId: `dimmer_${i + 1}_level`,
+			})
+			variables.push({
+				name: `Dimmer ${i + 1} Power Consumption`,
+				variableId: `dimmer_${i + 1}_consumption`,
+			})
+			variables.push({
+				name: `Dimmer ${i + 1} Temperature (°C)`,
+				variableId: `dimmer_${i + 1}_temp_c`,
+			})
+			variables.push({
+				name: `Dimmer ${i + 1} Temperature (°F)`,
+				variableId: `dimmer_${i + 1}_temp_f`,
+			})
+		}
+
+		for (let i = 0; i < this.inputCount; i++) {
+			variables.push({
+				name: `Input ${i + 1} State`,
+				variableId: `input_${i + 1}_state`,
+			})
+		}
+
+		return variables
+	}
+
+	getFeedbackDefinitions() {
+		const channelOptions = Array.from({ length: this.channelCount }, (_, index) => ({
+			id: index,
+			label: `Dimmer ${index + 1}`,
+		}))
+
+		const inputOptions = Array.from({ length: this.inputCount }, (_, index) => ({
+			id: index,
+			label: `Input ${index + 1}`,
+		}))
+
+		return {
+			dimmerState: {
+				type: 'boolean',
+				name: 'Dimmer state (ON = true)',
+				description: 'This feedback becomes active when the dimmer output changes to ON',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Dimmer',
+						id: 'selectedDimmer',
+						default: 0,
+						choices: channelOptions,
+					},
+				],
+				callback: (feedback) => {
+					return this.channelStates[feedback.options.selectedDimmer]
+				},
+			},
+			dimmerLevel: {
+				type: 'advanced',
+				name: 'Dimmer level',
+				description: 'Displays the current dimmer level',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Dimmer',
+						id: 'selectedDimmer',
+						default: 0,
+						choices: channelOptions,
+					},
+				],
+				callback: (feedback) => {
+					return {
+						text: `${this.channelLevels[feedback.options.selectedDimmer] ?? 0}%`,
+					}
+				},
+			},
+			powerConsumption: {
+				type: 'advanced',
+				name: 'Power consumption',
+				description: 'Displays the current power consumption',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Dimmer',
+						id: 'selectedDimmer',
+						default: 0,
+						choices: channelOptions,
+					},
+				],
+				callback: (feedback) => {
+					return {
+						text: `${this.powerConsumptions[feedback.options.selectedDimmer] ?? 0} W`,
+					}
+				},
+			},
+			dimmerTemp: {
+				type: 'advanced',
+				name: 'Dimmer temperature',
+				description: 'Displays the dimmer temperature',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Dimmer',
+						id: 'selectedDimmer',
+						default: 0,
+						choices: channelOptions,
+					},
+					{
+						type: 'dropdown',
+						label: 'Temperature format',
+						id: 'selectedTempFormat',
+						default: 0,
+						choices: [
+							{ id: 0, label: 'Celsius' },
+							{ id: 1, label: 'Fahrenheit' },
+						],
+					},
+				],
+				callback: (feedback) => {
+					switch (feedback.options.selectedTempFormat) {
+						case 1:
+							return {
+								text: `${this.channelTempsFahrenheit[feedback.options.selectedDimmer] ?? ''}`,
+							}
+						case 0:
+						default:
+							return {
+								text: `${this.channelTempsCelsius[feedback.options.selectedDimmer] ?? ''}`,
+							}
+					}
+				},
+			},
+			inputState: {
+				type: 'boolean',
+				name: 'Input state',
+				description: 'Feedback on the Shelly inputs',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Input',
+						id: 'selectedInput',
+						default: 0,
+						choices: inputOptions,
+					},
+				],
+				callback: (feedback) => {
+					return this.inputStates[feedback.options.selectedInput]
+				},
+			},
+		}
+	}
+
+	getActionDefinitions() {
+		const channelOptions = Array.from({ length: this.channelCount }, (_, index) => ({
+			id: index,
+			label: `Dimmer ${index + 1}`,
+		}))
+
+		return {
+			setDimmerState: {
+				name: 'Set dimmer state',
+				description: 'Turn dimmer output on or off',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Dimmer',
+						id: 'selectedDimmer',
+						default: 0,
+						choices: channelOptions,
+					},
+					{
+						type: 'dropdown',
+						label: 'State',
+						id: 'selectedState',
+						default: 0,
+						choices: [
+							{ id: 0, label: 'On' },
+							{ id: 1, label: 'Off' },
+						],
+					},
+				],
+				callback: async (action) => {
+					this.setDimmerState(action.options.selectedDimmer, action.options.selectedState === 0)
+				},
+			},
+			toggleDimmerState: {
+				name: 'Toggle dimmer state',
+				description: 'Toggle dimmer output on/off',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Dimmer',
+						id: 'selectedDimmer',
+						default: 0,
+						choices: channelOptions,
+					},
+				],
+				callback: async (action) => {
+					const current = this.channelStates[action.options.selectedDimmer] ?? false
+					this.setDimmerState(action.options.selectedDimmer, !current)
+				},
+			},
+			setDimmerLevel: {
+				name: 'Set dimmer level',
+				description: 'Set dimmer level as a percentage',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Dimmer',
+						id: 'selectedDimmer',
+						default: 0,
+						choices: channelOptions,
+					},
+					{
+						type: 'number',
+						label: 'Level (%)',
+						id: 'targetLevel',
+						default: 50,
+						min: 0,
+						max: 100,
+					},
+				],
+				callback: async (action) => {
+					this.setDimmerLevel(action.options.selectedDimmer, action.options.targetLevel)
+				},
+			},
+			stepDimmerLevel: {
+				name: 'Step dimmer level',
+				description: 'Increase or decrease dimmer level',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Dimmer',
+						id: 'selectedDimmer',
+						default: 0,
+						choices: channelOptions,
+					},
+					{
+						type: 'number',
+						label: 'Step amount (-100 to 100)',
+						id: 'stepAmount',
+						default: 10,
+						min: -100,
+						max: 100,
+					},
+				],
+				callback: async (action) => {
+					this.stepDimmerLevel(action.options.selectedDimmer, action.options.stepAmount)
+				},
+			},
+			...getRebootActionDefinition(this.rebootDevice.bind(this)),
+		}
+	}
+}
+
 export {
 	ShellyRelayMaster as ShellyMaster,
 	ShellyRelayMasterPM as ShellyMasterPM,
 	ShellyMasterCover,
 	ShellyMasterInput,
+	ShellyMasterDimmer,
 }
