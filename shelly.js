@@ -759,9 +759,484 @@ class ShellyMasterInput {
 	}
 }
 
+class ShellyMasterDimmer {
+	constructor(lightCount, inputCount, sendRequest) {
+		this.lightCount = lightCount
+		this.inputCount = inputCount
+		this.sendRequest = sendRequest
+
+		this.lightStates = []
+		this.lightBrightness = []
+		this.lightTempsCelsius = []
+		this.lightTempsFahrenheit = []
+		this.lightPower = []
+		this.lightVoltage = []
+		this.lightCurrent = []
+		this.lightEnergy = []
+		this.inputStates = []
+	}
+
+	parseIncomingData(data) {
+		const parse = (source) => {
+			if (!source) return
+
+			for (let i = 0; i < this.lightCount; i++) {
+				const lightData = source[`light:${i}`]
+				if (!lightData) continue
+
+				if (lightData.output !== undefined) {
+					this.lightStates[i] = lightData.output
+				}
+				if (lightData.brightness !== undefined) {
+					this.lightBrightness[i] = lightData.brightness
+				}
+				if (lightData.temperature !== undefined) {
+					this.lightTempsCelsius[i] = lightData.temperature.tC
+					this.lightTempsFahrenheit[i] = lightData.temperature.tF
+				}
+				if (lightData.apower !== undefined) {
+					this.lightPower[i] = lightData.apower
+				}
+				if (lightData.voltage !== undefined) {
+					this.lightVoltage[i] = lightData.voltage
+				}
+				if (lightData.current !== undefined) {
+					this.lightCurrent[i] = lightData.current
+				}
+				if (lightData.aenergy?.total !== undefined) {
+					this.lightEnergy[i] = lightData.aenergy.total
+				}
+			}
+
+			for (let i = 0; i < this.inputCount; i++) {
+				const inputData = source[`input:${i}`]
+				if (inputData?.state !== undefined) {
+					this.inputStates[i] = inputData.state
+				}
+			}
+		}
+
+		if (data.result != null) {
+			parse(data.result)
+		}
+
+		if (data.method === 'NotifyStatus') {
+			parse(data.params)
+		}
+	}
+
+	getVariableValues() {
+		const values = {}
+
+		for (let i = 0; i < this.lightCount; i++) {
+			values[`light_${i + 1}_state`] = this.lightStates[i] ?? false
+			values[`light_${i + 1}_brightness`] = this.lightBrightness[i] ?? 0
+			values[`light_${i + 1}_temp_c`] = this.lightTempsCelsius[i] ?? ''
+			values[`light_${i + 1}_temp_f`] = this.lightTempsFahrenheit[i] ?? ''
+			values[`light_${i + 1}_power`] = this.lightPower[i] ?? ''
+			values[`light_${i + 1}_voltage`] = this.lightVoltage[i] ?? ''
+			values[`light_${i + 1}_current`] = this.lightCurrent[i] ?? ''
+			values[`light_${i + 1}_energy`] = this.lightEnergy[i] ?? ''
+		}
+
+		for (let i = 0; i < this.inputCount; i++) {
+			values[`input_${i + 1}_state`] = this.inputStates[i] ?? false
+		}
+
+		return values
+	}
+
+	getVariableDefinitions() {
+		const variables = []
+
+		for (let i = 0; i < this.lightCount; i++) {
+			variables.push(
+				{ name: `Light ${i + 1} State`, variableId: `light_${i + 1}_state` },
+				{ name: `Light ${i + 1} Brightness (%)`, variableId: `light_${i + 1}_brightness` },
+				{ name: `Light ${i + 1} Temperature (°C)`, variableId: `light_${i + 1}_temp_c` },
+				{ name: `Light ${i + 1} Temperature (°F)`, variableId: `light_${i + 1}_temp_f` },
+				{ name: `Light ${i + 1} Power (W)`, variableId: `light_${i + 1}_power` },
+				{ name: `Light ${i + 1} Voltage (V)`, variableId: `light_${i + 1}_voltage` },
+				{ name: `Light ${i + 1} Current (A)`, variableId: `light_${i + 1}_current` },
+				{ name: `Light ${i + 1} Energy (Wh)`, variableId: `light_${i + 1}_energy` },
+			)
+		}
+
+		for (let i = 0; i < this.inputCount; i++) {
+			variables.push({
+				name: `Input ${i + 1} State`,
+				variableId: `input_${i + 1}_state`,
+			})
+		}
+
+		return variables
+	}
+
+	getFeedbackDefinitions() {
+		const lightOptions = Array.from({ length: this.lightCount }, (_, index) => ({
+			id: index,
+			label: `Light ${index + 1}`,
+		}))
+
+		const inputOptions = Array.from({ length: this.inputCount }, (_, index) => ({
+			id: index,
+			label: `Input ${index + 1}`,
+		}))
+
+		return {
+			lightState: {
+				type: 'boolean',
+				name: 'Light state',
+				description: 'Feedback for light on/off state',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+				],
+				callback: (feedback) => {
+					return this.lightStates[feedback.options.selectedLight] === true
+				},
+			},
+
+			brightness: {
+				type: 'boolean',
+				name: 'Brightness',
+				description: 'Compare current brightness with a value',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'dropdown',
+						label: 'Comparison',
+						id: 'operator',
+						default: 'eq',
+						choices: [
+							{ id: 'eq', label: 'Equals' },
+							{ id: 'gte', label: 'Greater than or equal' },
+							{ id: 'lte', label: 'Less than or equal' },
+							{ id: 'gt', label: 'Greater than' },
+							{ id: 'lt', label: 'Less than' },
+						],
+					},
+					{
+						type: 'number',
+						label: 'Brightness (%)',
+						id: 'brightness',
+						default: 50,
+						min: 0,
+						max: 100,
+					},
+				],
+				callback: (feedback) => {
+					const current = this.lightBrightness[feedback.options.selectedLight]
+					const target = feedback.options.brightness
+
+					if (current === undefined) return false
+
+					switch (feedback.options.operator) {
+						case 'eq':
+							return current === target
+						case 'gte':
+							return current >= target
+						case 'lte':
+							return current <= target
+						case 'gt':
+							return current > target
+						case 'lt':
+							return current < target
+						default:
+							return false
+					}
+				},
+			},
+
+			inputState: {
+				type: 'boolean',
+				name: 'Input state',
+				description: 'Feedback for Shelly input state',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Input',
+						id: 'selectedInput',
+						default: 0,
+						choices: inputOptions,
+					},
+				],
+				callback: (feedback) => {
+					return this.inputStates[feedback.options.selectedInput] === true
+				},
+			},
+
+			powerConsumption: {
+				type: 'advanced',
+				name: 'Power consumption',
+				description: 'Display current power consumption',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+				],
+				callback: (feedback) => ({
+					text: `${this.lightPower[feedback.options.selectedLight] ?? 0} W`,
+				}),
+			},
+		}
+	}
+
+	getActionDefinitions() {
+		const lightOptions = Array.from({ length: this.lightCount }, (_, index) => ({
+			id: index,
+			label: `Light ${index + 1}`,
+		}))
+
+		return {
+			setLightState: {
+				name: 'Set light state',
+				description: 'Turn a light on or off',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'dropdown',
+						label: 'State',
+						id: 'state',
+						default: true,
+						choices: [
+							{ id: true, label: 'On' },
+							{ id: false, label: 'Off' },
+						],
+					},
+				],
+				callback: async (action) => {
+					this.sendRequest('Light.Set', {
+						id: action.options.selectedLight,
+						on: action.options.state,
+					})
+				},
+			},
+
+			toggleLight: {
+				name: 'Toggle light',
+				description: 'Toggle light on/off',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+				],
+				callback: async (action) => {
+					this.sendRequest('Light.Toggle', {
+						id: action.options.selectedLight,
+					})
+				},
+			},
+
+			setBrightness: {
+				name: 'Set brightness',
+				description: 'Set light brightness',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'number',
+						label: 'Brightness (%)',
+						id: 'brightness',
+						default: 50,
+						min: 0,
+						max: 100,
+					},
+					{
+						type: 'checkbox',
+						label: 'Turn light on',
+						id: 'turnOn',
+						default: true,
+					},
+				],
+				callback: async (action) => {
+					this.sendRequest('Light.Set', {
+						id: action.options.selectedLight,
+						on: action.options.turnOn,
+						brightness: action.options.brightness,
+					})
+				},
+			},
+
+			setBrightnessTransition: {
+				name: 'Set brightness with transition',
+				description: 'Set brightness with a defined fade time',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'number',
+						label: 'Brightness (%)',
+						id: 'brightness',
+						default: 50,
+						min: 0,
+						max: 100,
+					},
+					{
+						type: 'number',
+						label: 'Transition duration (seconds)',
+						id: 'transition',
+						default: 2,
+						min: 0,
+						max: 10800,
+						step: 0.1,
+					},
+				],
+				callback: async (action) => {
+					this.sendRequest('Light.Set', {
+						id: action.options.selectedLight,
+						on: true,
+						brightness: action.options.brightness,
+						transition_duration: action.options.transition,
+					})
+				},
+			},
+
+			brightnessOffset: {
+				name: 'Adjust brightness',
+				description: 'Increase or decrease brightness relatively',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'number',
+						label: 'Offset (%)',
+						id: 'offset',
+						default: 10,
+						min: -100,
+						max: 100,
+					},
+				],
+				callback: async (action) => {
+					this.sendRequest('Light.Set', {
+						id: action.options.selectedLight,
+						offset: action.options.offset,
+					})
+				},
+			},
+
+			dimUp: {
+				name: 'Dim up',
+				description: 'Start dimming up until Dim Stop is called',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'number',
+						label: 'Fade rate (1 slow - 5 fast)',
+						id: 'fadeRate',
+						default: 3,
+						min: 1,
+						max: 5,
+					},
+				],
+				callback: async (action) => {
+					this.sendRequest('Light.DimUp', {
+						id: action.options.selectedLight,
+						fade_rate: action.options.fadeRate,
+					})
+				},
+			},
+
+			dimDown: {
+				name: 'Dim down',
+				description: 'Start dimming down until Dim Stop is called',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'number',
+						label: 'Fade rate (1 slow - 5 fast)',
+						id: 'fadeRate',
+						default: 3,
+						min: 1,
+						max: 5,
+					},
+				],
+				callback: async (action) => {
+					this.sendRequest('Light.DimDown', {
+						id: action.options.selectedLight,
+						fade_rate: action.options.fadeRate,
+					})
+				},
+			},
+
+			dimStop: {
+				name: 'Dim stop',
+				description: 'Stop an active dim operation',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+				],
+				callback: async (action) => {
+					this.sendRequest('Light.DimStop', {
+						id: action.options.selectedLight,
+					})
+				},
+			},
+		}
+	}
+}
+
 export {
 	ShellyRelayMaster as ShellyMaster,
 	ShellyRelayMasterPM as ShellyMasterPM,
 	ShellyMasterCover,
 	ShellyMasterInput,
+	ShellyMasterDimmer,
 }
