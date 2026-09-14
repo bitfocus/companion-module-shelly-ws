@@ -773,6 +773,9 @@ class ShellyMasterDimmer {
 		this.lightVoltage = []
 		this.lightCurrent = []
 		this.lightEnergy = []
+		this.lightCalibrationProgress = []
+		this.lightCalibrationRunning = []
+		this.lightCalibrationErrors = []
 		this.inputStates = []
 	}
 
@@ -806,6 +809,17 @@ class ShellyMasterDimmer {
 				if (lightData.aenergy?.total !== undefined) {
 					this.lightEnergy[i] = lightData.aenergy.total
 				}
+				if (lightData.calibration !== undefined) {
+					this.lightCalibrationRunning[i] = true
+					this.lightCalibrationProgress[i] = lightData.calibration.progress ?? 0
+					this.lightCalibrationErrors[i] = Array.isArray(lightData.calibration.errors)
+						? lightData.calibration.errors.join(', ')
+						: ''
+				} else {
+					this.lightCalibrationRunning[i] = false
+					this.lightCalibrationProgress[i] = 0
+					this.lightCalibrationErrors[i] = ''
+				}
 			}
 
 			for (let i = 0; i < this.inputCount; i++) {
@@ -837,6 +851,9 @@ class ShellyMasterDimmer {
 			values[`light_${i + 1}_voltage`] = this.lightVoltage[i] ?? ''
 			values[`light_${i + 1}_current`] = this.lightCurrent[i] ?? ''
 			values[`light_${i + 1}_energy`] = this.lightEnergy[i] ?? ''
+			values[`light_${i + 1}_calibration_progress`] = this.lightCalibrationProgress[i] ?? 0
+			values[`light_${i + 1}_calibration_status`] = this.lightCalibrationRunning[i] ? 'Running' : 'Idle'
+			values[`light_${i + 1}_calibration_errors`] = this.lightCalibrationErrors[i] ?? ''
 		}
 
 		for (let i = 0; i < this.inputCount; i++) {
@@ -859,6 +876,9 @@ class ShellyMasterDimmer {
 				{ name: `Light ${i + 1} Voltage (V)`, variableId: `light_${i + 1}_voltage` },
 				{ name: `Light ${i + 1} Current (A)`, variableId: `light_${i + 1}_current` },
 				{ name: `Light ${i + 1} Energy (Wh)`, variableId: `light_${i + 1}_energy` },
+				{ name: `Light ${i + 1} Calibration Progress (%)`, variableId: `light_${i + 1}_calibration_progress` },
+				{ name: `Light ${i + 1} Calibration Status`, variableId: `light_${i + 1}_calibration_status` },
+				{ name: `Light ${i + 1} Calibration Errors`, variableId: `light_${i + 1}_calibration_errors` },
 			)
 		}
 
@@ -976,7 +996,23 @@ class ShellyMasterDimmer {
 					return this.inputStates[feedback.options.selectedInput] === true
 				},
 			},
-
+			calibrationRunning: {
+				type: 'boolean',
+				name: 'Calibration running',
+				description: 'Feedback is active while calibration is running',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+				],
+				callback: (feedback) => {
+					return this.lightCalibrationRunning[feedback.options.selectedLight] === true
+				},
+			},
 			powerConsumption: {
 				type: 'advanced',
 				name: 'Power consumption',
@@ -1006,7 +1042,7 @@ class ShellyMasterDimmer {
 		return {
 			setLightState: {
 				name: 'Set light state',
-				description: 'Turn a light on or off',
+				description: 'Turn a light on, off or toggle its current state',
 				options: [
 					{
 						type: 'dropdown',
@@ -1019,43 +1055,31 @@ class ShellyMasterDimmer {
 						type: 'dropdown',
 						label: 'State',
 						id: 'state',
-						default: true,
+						default: 'on',
 						choices: [
-							{ id: true, label: 'On' },
-							{ id: false, label: 'Off' },
+							{ id: 'on', label: 'On' },
+							{ id: 'off', label: 'Off' },
+							{ id: 'toggle', label: 'Toggle' },
 						],
 					},
 				],
 				callback: async (action) => {
-					this.sendRequest('Light.Set', {
-						id: action.options.selectedLight,
-						on: action.options.state,
-					})
-				},
-			},
-
-			toggleLight: {
-				name: 'Toggle light',
-				description: 'Toggle light on/off',
-				options: [
-					{
-						type: 'dropdown',
-						label: 'Light',
-						id: 'selectedLight',
-						default: 0,
-						choices: lightOptions,
-					},
-				],
-				callback: async (action) => {
-					this.sendRequest('Light.Toggle', {
-						id: action.options.selectedLight,
-					})
+					if (action.options.state === 'toggle') {
+						this.sendRequest('Light.Toggle', {
+							id: action.options.selectedLight,
+						})
+					} else {
+						this.sendRequest('Light.Set', {
+							id: action.options.selectedLight,
+							on: action.options.state === 'on',
+						})
+					}
 				},
 			},
 
 			setBrightness: {
 				name: 'Set brightness',
-				description: 'Set light brightness',
+				description: 'Set light brightness with an optional transition',
 				options: [
 					{
 						type: 'dropdown',
@@ -1078,52 +1102,28 @@ class ShellyMasterDimmer {
 						id: 'turnOn',
 						default: true,
 					},
-				],
-				callback: async (action) => {
-					this.sendRequest('Light.Set', {
-						id: action.options.selectedLight,
-						on: action.options.turnOn,
-						brightness: action.options.brightness,
-					})
-				},
-			},
-
-			setBrightnessTransition: {
-				name: 'Set brightness with transition',
-				description: 'Set brightness with a defined fade time',
-				options: [
-					{
-						type: 'dropdown',
-						label: 'Light',
-						id: 'selectedLight',
-						default: 0,
-						choices: lightOptions,
-					},
 					{
 						type: 'number',
-						label: 'Brightness (%)',
-						id: 'brightness',
-						default: 50,
-						min: 0,
-						max: 100,
-					},
-					{
-						type: 'number',
-						label: 'Transition duration (seconds)',
+						label: 'Transition duration (seconds, 0 = no transition)',
 						id: 'transition',
-						default: 2,
+						default: 0,
 						min: 0,
 						max: 10800,
 						step: 0.1,
 					},
 				],
 				callback: async (action) => {
-					this.sendRequest('Light.Set', {
+					const params = {
 						id: action.options.selectedLight,
-						on: true,
+						on: action.options.turnOn,
 						brightness: action.options.brightness,
-						transition_duration: action.options.transition,
-					})
+					}
+
+					if (action.options.transition > 0) {
+						params.transition_duration = action.options.transition
+					}
+
+					this.sendRequest('Light.Set', params)
 				},
 			},
 
@@ -1155,9 +1155,9 @@ class ShellyMasterDimmer {
 				},
 			},
 
-			dimUp: {
-				name: 'Dim up',
-				description: 'Start dimming up until Dim Stop is called',
+			dimControl: {
+				name: 'Dim control',
+				description: 'Start or stop continuous dimming',
 				options: [
 					{
 						type: 'dropdown',
@@ -1165,6 +1165,17 @@ class ShellyMasterDimmer {
 						id: 'selectedLight',
 						default: 0,
 						choices: lightOptions,
+					},
+					{
+						type: 'dropdown',
+						label: 'Function',
+						id: 'dimFunction',
+						default: 'up',
+						choices: [
+							{ id: 'up', label: 'Dim Up' },
+							{ id: 'down', label: 'Dim Down' },
+							{ id: 'stop', label: 'Dim Stop' },
+						],
 					},
 					{
 						type: 'number',
@@ -1173,47 +1184,27 @@ class ShellyMasterDimmer {
 						default: 3,
 						min: 1,
 						max: 5,
+						isVisible: (options) => options.dimFunction !== 'stop',
 					},
 				],
 				callback: async (action) => {
-					this.sendRequest('Light.DimUp', {
+					if (action.options.dimFunction === 'stop') {
+						this.sendRequest('Light.DimStop', {
+							id: action.options.selectedLight,
+						})
+						return
+					}
+
+					this.sendRequest(action.options.dimFunction === 'up' ? 'Light.DimUp' : 'Light.DimDown', {
 						id: action.options.selectedLight,
 						fade_rate: action.options.fadeRate,
 					})
 				},
 			},
 
-			dimDown: {
-				name: 'Dim down',
-				description: 'Start dimming down until Dim Stop is called',
-				options: [
-					{
-						type: 'dropdown',
-						label: 'Light',
-						id: 'selectedLight',
-						default: 0,
-						choices: lightOptions,
-					},
-					{
-						type: 'number',
-						label: 'Fade rate (1 slow - 5 fast)',
-						id: 'fadeRate',
-						default: 3,
-						min: 1,
-						max: 5,
-					},
-				],
-				callback: async (action) => {
-					this.sendRequest('Light.DimDown', {
-						id: action.options.selectedLight,
-						fade_rate: action.options.fadeRate,
-					})
-				},
-			},
-
-			dimStop: {
-				name: 'Dim stop',
-				description: 'Stop an active dim operation',
+			calibrate: {
+				name: 'Start calibration',
+				description: 'Start calibration for the selected light output',
 				options: [
 					{
 						type: 'dropdown',
@@ -1224,7 +1215,7 @@ class ShellyMasterDimmer {
 					},
 				],
 				callback: async (action) => {
-					this.sendRequest('Light.DimStop', {
+					this.sendRequest('Light.Calibrate', {
 						id: action.options.selectedLight,
 					})
 				},

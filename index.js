@@ -98,6 +98,9 @@ class WebsocketInstance extends InstanceBase {
 			case 13:
 				this.shelly = new ShellyMasterDimmer(1, 2, sendRequest)
 				break
+			case 14:
+				this.shelly = new ShellyMasterDimmer(2, 4, sendRequest)
+				break
 		}
 		this.initFeedbacks()
 		this.initActions()
