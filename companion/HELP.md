@@ -13,5 +13,6 @@ This module allows adding Shelly Plus devices to your Companion instance. This m
 - Shelly Pro 2PM (Roller Mode)
 - Shelly Pro 3
 - Shelly Pro 4PM
+- Shelly 0/1-10V PM Dimmer (Pro / Gen3)
 
 If you want to control older Shelly devices (without Pro or Plus in the product name) use the shelly-http module.
