@@ -759,9 +759,475 @@ class ShellyMasterInput {
 	}
 }
 
+class ShellyMasterDimmer {
+	constructor(lightCount, inputCount, sendRequest) {
+		this.lightCount = lightCount
+		this.inputCount = inputCount
+		this.sendRequest = sendRequest
+
+		this.lightStates = []
+		this.lightBrightness = []
+		this.lightTempsCelsius = []
+		this.lightTempsFahrenheit = []
+		this.lightPower = []
+		this.lightVoltage = []
+		this.lightCurrent = []
+		this.lightEnergy = []
+		this.lightCalibrationProgress = []
+		this.lightCalibrationRunning = []
+		this.lightCalibrationErrors = []
+		this.inputStates = []
+	}
+
+	parseIncomingData(data) {
+		const parse = (source) => {
+			if (!source) return
+
+			for (let i = 0; i < this.lightCount; i++) {
+				const lightData = source[`light:${i}`]
+				if (!lightData) continue
+
+				if (lightData.output !== undefined) {
+					this.lightStates[i] = lightData.output
+				}
+				if (lightData.brightness !== undefined) {
+					this.lightBrightness[i] = lightData.brightness
+				}
+				if (lightData.temperature !== undefined) {
+					this.lightTempsCelsius[i] = lightData.temperature.tC
+					this.lightTempsFahrenheit[i] = lightData.temperature.tF
+				}
+				if (lightData.apower !== undefined) {
+					this.lightPower[i] = lightData.apower
+				}
+				if (lightData.voltage !== undefined) {
+					this.lightVoltage[i] = lightData.voltage
+				}
+				if (lightData.current !== undefined) {
+					this.lightCurrent[i] = lightData.current
+				}
+				if (lightData.aenergy?.total !== undefined) {
+					this.lightEnergy[i] = lightData.aenergy.total
+				}
+				if (lightData.calibration !== undefined) {
+					this.lightCalibrationRunning[i] = true
+					this.lightCalibrationProgress[i] = lightData.calibration.progress ?? 0
+					this.lightCalibrationErrors[i] = Array.isArray(lightData.calibration.errors)
+						? lightData.calibration.errors.join(', ')
+						: ''
+				} else {
+					this.lightCalibrationRunning[i] = false
+					this.lightCalibrationProgress[i] = 0
+					this.lightCalibrationErrors[i] = ''
+				}
+			}
+
+			for (let i = 0; i < this.inputCount; i++) {
+				const inputData = source[`input:${i}`]
+				if (inputData?.state !== undefined) {
+					this.inputStates[i] = inputData.state
+				}
+			}
+		}
+
+		if (data.result != null) {
+			parse(data.result)
+		}
+
+		if (data.method === 'NotifyStatus') {
+			parse(data.params)
+		}
+	}
+
+	getVariableValues() {
+		const values = {}
+
+		for (let i = 0; i < this.lightCount; i++) {
+			values[`light_${i + 1}_state`] = this.lightStates[i] ?? false
+			values[`light_${i + 1}_brightness`] = this.lightBrightness[i] ?? 0
+			values[`light_${i + 1}_temp_c`] = this.lightTempsCelsius[i] ?? ''
+			values[`light_${i + 1}_temp_f`] = this.lightTempsFahrenheit[i] ?? ''
+			values[`light_${i + 1}_power`] = this.lightPower[i] ?? ''
+			values[`light_${i + 1}_voltage`] = this.lightVoltage[i] ?? ''
+			values[`light_${i + 1}_current`] = this.lightCurrent[i] ?? ''
+			values[`light_${i + 1}_energy`] = this.lightEnergy[i] ?? ''
+			values[`light_${i + 1}_calibration_progress`] = this.lightCalibrationProgress[i] ?? 0
+			values[`light_${i + 1}_calibration_status`] = this.lightCalibrationRunning[i] ? 'Running' : 'Idle'
+			values[`light_${i + 1}_calibration_errors`] = this.lightCalibrationErrors[i] ?? ''
+		}
+
+		for (let i = 0; i < this.inputCount; i++) {
+			values[`input_${i + 1}_state`] = this.inputStates[i] ?? false
+		}
+
+		return values
+	}
+
+	getVariableDefinitions() {
+		const variables = []
+
+		for (let i = 0; i < this.lightCount; i++) {
+			variables.push(
+				{ name: `Light ${i + 1} State`, variableId: `light_${i + 1}_state` },
+				{ name: `Light ${i + 1} Brightness (%)`, variableId: `light_${i + 1}_brightness` },
+				{ name: `Light ${i + 1} Temperature (°C)`, variableId: `light_${i + 1}_temp_c` },
+				{ name: `Light ${i + 1} Temperature (°F)`, variableId: `light_${i + 1}_temp_f` },
+				{ name: `Light ${i + 1} Power (W)`, variableId: `light_${i + 1}_power` },
+				{ name: `Light ${i + 1} Voltage (V)`, variableId: `light_${i + 1}_voltage` },
+				{ name: `Light ${i + 1} Current (A)`, variableId: `light_${i + 1}_current` },
+				{ name: `Light ${i + 1} Energy (Wh)`, variableId: `light_${i + 1}_energy` },
+				{ name: `Light ${i + 1} Calibration Progress (%)`, variableId: `light_${i + 1}_calibration_progress` },
+				{ name: `Light ${i + 1} Calibration Status`, variableId: `light_${i + 1}_calibration_status` },
+				{ name: `Light ${i + 1} Calibration Errors`, variableId: `light_${i + 1}_calibration_errors` },
+			)
+		}
+
+		for (let i = 0; i < this.inputCount; i++) {
+			variables.push({
+				name: `Input ${i + 1} State`,
+				variableId: `input_${i + 1}_state`,
+			})
+		}
+
+		return variables
+	}
+
+	getFeedbackDefinitions() {
+		const lightOptions = Array.from({ length: this.lightCount }, (_, index) => ({
+			id: index,
+			label: `Light ${index + 1}`,
+		}))
+
+		const inputOptions = Array.from({ length: this.inputCount }, (_, index) => ({
+			id: index,
+			label: `Input ${index + 1}`,
+		}))
+
+		return {
+			lightState: {
+				type: 'boolean',
+				name: 'Light state',
+				description: 'Feedback for light on/off state',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+				],
+				callback: (feedback) => {
+					return this.lightStates[feedback.options.selectedLight] === true
+				},
+			},
+
+			brightness: {
+				type: 'boolean',
+				name: 'Brightness',
+				description: 'Compare current brightness with a value',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'dropdown',
+						label: 'Comparison',
+						id: 'operator',
+						default: 'eq',
+						choices: [
+							{ id: 'eq', label: 'Equals' },
+							{ id: 'gte', label: 'Greater than or equal' },
+							{ id: 'lte', label: 'Less than or equal' },
+							{ id: 'gt', label: 'Greater than' },
+							{ id: 'lt', label: 'Less than' },
+						],
+					},
+					{
+						type: 'number',
+						label: 'Brightness (%)',
+						id: 'brightness',
+						default: 50,
+						min: 0,
+						max: 100,
+					},
+				],
+				callback: (feedback) => {
+					const current = this.lightBrightness[feedback.options.selectedLight]
+					const target = feedback.options.brightness
+
+					if (current === undefined) return false
+
+					switch (feedback.options.operator) {
+						case 'eq':
+							return current === target
+						case 'gte':
+							return current >= target
+						case 'lte':
+							return current <= target
+						case 'gt':
+							return current > target
+						case 'lt':
+							return current < target
+						default:
+							return false
+					}
+				},
+			},
+
+			inputState: {
+				type: 'boolean',
+				name: 'Input state',
+				description: 'Feedback for Shelly input state',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Input',
+						id: 'selectedInput',
+						default: 0,
+						choices: inputOptions,
+					},
+				],
+				callback: (feedback) => {
+					return this.inputStates[feedback.options.selectedInput] === true
+				},
+			},
+			calibrationRunning: {
+				type: 'boolean',
+				name: 'Calibration running',
+				description: 'Feedback is active while calibration is running',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+				],
+				callback: (feedback) => {
+					return this.lightCalibrationRunning[feedback.options.selectedLight] === true
+				},
+			},
+			powerConsumption: {
+				type: 'advanced',
+				name: 'Power consumption',
+				description: 'Display current power consumption',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+				],
+				callback: (feedback) => ({
+					text: `${this.lightPower[feedback.options.selectedLight] ?? 0} W`,
+				}),
+			},
+		}
+	}
+
+	getActionDefinitions() {
+		const lightOptions = Array.from({ length: this.lightCount }, (_, index) => ({
+			id: index,
+			label: `Light ${index + 1}`,
+		}))
+
+		return {
+			setLightState: {
+				name: 'Set light state',
+				description: 'Turn a light on, off or toggle its current state',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'dropdown',
+						label: 'State',
+						id: 'state',
+						default: 'on',
+						choices: [
+							{ id: 'on', label: 'On' },
+							{ id: 'off', label: 'Off' },
+							{ id: 'toggle', label: 'Toggle' },
+						],
+					},
+				],
+				callback: async (action) => {
+					if (action.options.state === 'toggle') {
+						this.sendRequest('Light.Toggle', {
+							id: action.options.selectedLight,
+						})
+					} else {
+						this.sendRequest('Light.Set', {
+							id: action.options.selectedLight,
+							on: action.options.state === 'on',
+						})
+					}
+				},
+			},
+
+			setBrightness: {
+				name: 'Set brightness',
+				description: 'Set light brightness with an optional transition',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'number',
+						label: 'Brightness (%)',
+						id: 'brightness',
+						default: 50,
+						min: 0,
+						max: 100,
+					},
+					{
+						type: 'checkbox',
+						label: 'Turn light on',
+						id: 'turnOn',
+						default: true,
+					},
+					{
+						type: 'number',
+						label: 'Transition duration (seconds, 0 = no transition)',
+						id: 'transition',
+						default: 0,
+						min: 0,
+						max: 10800,
+						step: 0.1,
+					},
+				],
+				callback: async (action) => {
+					const params = {
+						id: action.options.selectedLight,
+						on: action.options.turnOn,
+						brightness: action.options.brightness,
+					}
+
+					if (action.options.transition > 0) {
+						params.transition_duration = action.options.transition
+					}
+
+					this.sendRequest('Light.Set', params)
+				},
+			},
+
+			brightnessOffset: {
+				name: 'Adjust brightness',
+				description: 'Increase or decrease brightness relatively',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'number',
+						label: 'Offset (%)',
+						id: 'offset',
+						default: 10,
+						min: -100,
+						max: 100,
+					},
+				],
+				callback: async (action) => {
+					this.sendRequest('Light.Set', {
+						id: action.options.selectedLight,
+						offset: action.options.offset,
+					})
+				},
+			},
+
+			dimControl: {
+				name: 'Dim control',
+				description: 'Start or stop continuous dimming',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+					{
+						type: 'dropdown',
+						label: 'Function',
+						id: 'dimFunction',
+						default: 'up',
+						choices: [
+							{ id: 'up', label: 'Dim Up' },
+							{ id: 'down', label: 'Dim Down' },
+							{ id: 'stop', label: 'Dim Stop' },
+						],
+					},
+					{
+						type: 'number',
+						label: 'Fade rate (1 slow - 5 fast)',
+						id: 'fadeRate',
+						default: 3,
+						min: 1,
+						max: 5,
+						isVisible: (options) => options.dimFunction !== 'stop',
+					},
+				],
+				callback: async (action) => {
+					if (action.options.dimFunction === 'stop') {
+						this.sendRequest('Light.DimStop', {
+							id: action.options.selectedLight,
+						})
+						return
+					}
+
+					this.sendRequest(action.options.dimFunction === 'up' ? 'Light.DimUp' : 'Light.DimDown', {
+						id: action.options.selectedLight,
+						fade_rate: action.options.fadeRate,
+					})
+				},
+			},
+
+			calibrate: {
+				name: 'Start calibration',
+				description: 'Start calibration for the selected light output',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Light',
+						id: 'selectedLight',
+						default: 0,
+						choices: lightOptions,
+					},
+				],
+				callback: async (action) => {
+					this.sendRequest('Light.Calibrate', {
+						id: action.options.selectedLight,
+					})
+				},
+			},
+		}
+	}
+}
+
 export {
 	ShellyRelayMaster as ShellyMaster,
 	ShellyRelayMasterPM as ShellyMasterPM,
 	ShellyMasterCover,
 	ShellyMasterInput,
+	ShellyMasterDimmer,
 }
