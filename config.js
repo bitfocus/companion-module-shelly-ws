@@ -52,6 +52,21 @@ export const configFields = [
 			{ id: 10, label: 'Shelly Pro 4PM' },
 			{ id: 11, label: 'Shelly Pro Dual Cover PM' },
 			{ id: 12, label: 'Shelly Plus I4' },
+			{ id: 13, label: 'Shelly Pro RGBWW PM' },
+		],
+	},
+	{
+		type: 'dropdown',
+		id: 'rgbwwMode',
+		label: 'RGBWW Mode',
+		width: 6,
+		default: 0,
+		isVisible: (options) => options.shellyProduct == 13,
+		choices: [
+			{ id: 0, label: 'RGB + CCT (rgbcct, default profile)' },
+			{ id: 1, label: '5x Light (light, generic dimmer channels)' },
+			{ id: 2, label: '2x CCT (cctx2)' },
+			{ id: 3, label: 'RGB + 2x Light (rgbx2light)' },
 		],
 	},
 ]
