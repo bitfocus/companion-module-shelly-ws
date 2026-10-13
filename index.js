@@ -1,7 +1,17 @@
 import { InstanceBase, runEntrypoint, InstanceStatus } from '@companion-module/base'
 import WebSocket from 'ws'
 import { upgradeScripts } from './upgrade.js'
-import { ShellyMaster, ShellyMasterCover, ShellyMasterPM, ShellyMasterInput, ShellyMasterDimmer } from './shelly.js'
+import {
+	ShellyMaster,
+	ShellyMasterCover,
+	ShellyMasterPM,
+	ShellyMasterInput,
+	ShellyMasterRGBCCT,
+	ShellyMasterLight,
+	ShellyMasterCCT,
+	ShellyMasterRGBLight,
+	ShellyMasterDimmer,
+} from './shelly.js'
 import { configFields } from './config.js'
 import * as crypto from 'crypto'
 
@@ -96,9 +106,25 @@ class WebsocketInstance extends InstanceBase {
 				this.shelly = new ShellyMasterInput(4, sendRequest)
 				break
 			case 13:
-				this.shelly = new ShellyMasterDimmer(1, 2, sendRequest)
+				switch (this.config.rgbwwMode) {
+					case 1:
+						this.shelly = new ShellyMasterLight(5, 5, sendRequest)
+						break
+					case 2:
+						this.shelly = new ShellyMasterCCT(2, 5, sendRequest)
+						break
+					case 3:
+						this.shelly = new ShellyMasterRGBLight(2, 5, sendRequest)
+						break
+					default:
+						this.shelly = new ShellyMasterRGBCCT(5, sendRequest)
+						break
+				}
 				break
 			case 14:
+				this.shelly = new ShellyMasterDimmer(1, 2, sendRequest)
+				break
+			case 15:
 				this.shelly = new ShellyMasterDimmer(2, 4, sendRequest)
 				break
 		}
