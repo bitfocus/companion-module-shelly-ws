@@ -32,7 +32,9 @@
 		"Shelly Pro 4PM",
 		"Shelly Pro Dual Cover PM",
 		"Shelly Plus I4",
-		"Shelly Pro RGBWW PM"
+		"Shelly Pro RGBWW PM",
+		"Shelly Dimmer Gen4",
+		"Shelly Pro Dimmer 2PM"
 	],
 	"keywords": ["Shelly", "Relay"]
 }

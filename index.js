@@ -10,6 +10,7 @@ import {
 	ShellyMasterLight,
 	ShellyMasterCCT,
 	ShellyMasterRGBLight,
+	ShellyMasterDimmer,
 } from './shelly.js'
 import { configFields } from './config.js'
 import * as crypto from 'crypto'
@@ -119,6 +120,12 @@ class WebsocketInstance extends InstanceBase {
 						this.shelly = new ShellyMasterRGBCCT(5, sendRequest)
 						break
 				}
+				break
+			case 14:
+				this.shelly = new ShellyMasterDimmer(1, 2, sendRequest)
+				break
+			case 15:
+				this.shelly = new ShellyMasterDimmer(2, 4, sendRequest)
 				break
 		}
 		this.initFeedbacks()

@@ -53,6 +53,8 @@ export const configFields = [
 			{ id: 11, label: 'Shelly Pro Dual Cover PM' },
 			{ id: 12, label: 'Shelly Plus I4' },
 			{ id: 13, label: 'Shelly Pro RGBWW PM' },
+			{ id: 14, label: 'Shelly Dimmer Gen4' },
+			{ id: 15, label: 'Shelly Pro Dimmer 2PM' },
 		],
 	},
 	{
